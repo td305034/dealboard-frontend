@@ -1,15 +1,16 @@
-import { Text, View } from "react-native";
+import { ActivityIndicator } from "react-native";
+import { useAuth } from "@/context/auth";
+import LoginForm from "@/components/LoginForm";
+export default function HomeScreen() {
+  const { user, isLoading } = useAuth();
 
-export default function Index() {
-  return (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-    >
-      <Text>Edit app/index.tsx to edit this screen.</Text>
-    </View>
-  );
+  if (isLoading) {
+    return <></>;
+  }
+
+  if (!user) {
+    return <LoginForm />;
+  }
+
+  return <></>;
 }
