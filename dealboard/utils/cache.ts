@@ -10,11 +10,11 @@ const createTokenCache = (): TokenCache => {
   return {
     getToken: async (key: string) => {
       try {
-        const item = await SecureStore.getItem("auth_token");
+        const item = await SecureStore.getItemAsync(key);
         if (!item) {
           console.log("We don't have a cached session");
         } else {
-          console.log("Sesssion restored from cache");
+          console.log("Session restored from cache");
         }
         return item;
       } catch (e) {

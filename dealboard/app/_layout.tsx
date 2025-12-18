@@ -8,29 +8,12 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 
 export default function RootLayout() {
+  console.log("layout2");
   return (
     <AuthProvider>
       <SafeAreaProvider>
         <StatusBar style="auto" />
-        <Stack>
-          <Stack.Screen
-            name="index"
-            options={{ headerShown: false }}
-          ></Stack.Screen>
-          <Stack.Screen
-            name="(protected)"
-            options={{
-              headerShown: false,
-              animation: "none",
-            }}
-          />
-          <Stack.Screen
-            name="sign-in"
-            options={{
-              animation: "none",
-            }}
-          />
-        </Stack>
+        <Stack />
       </SafeAreaProvider>
     </AuthProvider>
   );

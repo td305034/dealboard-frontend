@@ -17,7 +17,10 @@ import { Platform } from "react-native";
 import { tokenCache } from "@/utils/cache";
 import * as jose from "jose";
 
-WebBrowser.maybeCompleteAuthSession();
+// Only complete auth session on web - Expo Router handles deep links on native
+if (Platform.OS === "web") {
+  WebBrowser.maybeCompleteAuthSession();
+}
 
 export type AuthUser = {
   sub: string;
@@ -53,6 +56,10 @@ const config: AuthRequestConfig = {
   clientId: "google",
   scopes: ["openid", "profile", "email"],
   redirectUri: makeRedirectUri(),
+  // redirectUri:
+  //   Platform.OS === "web"
+  //     ? makeRedirectUri()
+  //     : `${SPRING_TUNNEL}/api/auth/callback`,
 };
 
 const discovery: DiscoveryDocument = {
@@ -68,15 +75,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = React.useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = React.useState<boolean>(false);
   const [error, setError] = React.useState<AuthError | null>(null);
-  const [accessToken, setAccessToken] = React.useState<string | null>();
 
   const [request, response, promptAsync] = useAuthRequest(config, discovery);
   const isWeb = Platform.OS === "web";
+  const responseRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     if (!response) return;
 
+    // Create unique ID for this response to prevent duplicate processing
+    const responseId = `${response.type}-${Date.now()}`;
+
+    // Skip if we already processed this exact response
+    if (responseRef.current === responseId) {
+      console.log("Skipping duplicate response processing");
+      return;
+    }
+
     if (response.type === "success" || response.type === "error") {
+      responseRef.current = responseId;
       handleResponse();
     }
   }, [response]);
@@ -108,7 +125,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
               if (currentTime < exp) {
                 setUser(decoded as AuthUser);
-                setAccessToken(storedAccessToken);
                 return;
               } else {
                 setUser(null);
@@ -182,7 +198,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             console.error("No access token received");
             return;
           }
-          setAccessToken(accessToken);
 
           tokenCache?.saveToken(TOKEN_KEY_NAME, accessToken);
 
@@ -238,7 +253,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } else {
         await tokenCache?.saveToken(TOKEN_KEY_NAME, data.accessToken);
         setUser(data.user);
-        setAccessToken(data.accessToken);
       }
     } catch (error) {
       console.error("Sign in error:", error);
@@ -282,7 +296,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } else {
         await tokenCache?.saveToken(TOKEN_KEY_NAME, data.accessToken);
         setUser(data.user);
-        setAccessToken(data.accessToken);
       }
     } catch (error) {
       console.error("Sign up error:", error);
@@ -306,7 +319,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     setUser(null);
-    setAccessToken("");
   };
 
   return (

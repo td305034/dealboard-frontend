@@ -22,7 +22,7 @@ export default function LoginForm() {
   };
 
   function handleGoToSignUp() {
-    router.push("/sign-up");
+    router.replace("/sign-up");
   }
 
   return (

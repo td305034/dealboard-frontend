@@ -5,26 +5,38 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: "#6200ee",
+        headerStyle: { backgroundColor: "#f5f5f5" },
+        headerShadowVisible: false,
+        headerTitleAlign: "center",
+        tabBarStyle: {
+          backgroundColor: "#f5f5f5",
+          borderTopWidth: 0,
+          elevation: 0,
+          shadowOpacity: 0.5,
+        },
+        tabBarInactiveTintColor: "#666",
       }}
     >
       <Tabs.Screen
-        name="home"
+        name="index"
         options={{
-          title: "Home",
+          title: "Today's Tasks",
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="home" size={size} color={color} />
+            <MaterialCommunityIcons
+              name="briefcase-outline"
+              size={size}
+              color={color}
+            />
           ),
         }}
       />
       <Tabs.Screen
-        name="deals"
+        name="streaks"
         options={{
-          title: "Deals",
+          title: "Streaks",
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons
-              name="briefcase"
+              name="chart-line"
               size={size}
               color={color}
             />
@@ -34,9 +46,13 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Profil",
+          title: "Profile ",
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="account" size={size} color={color} />
+            <MaterialCommunityIcons
+              name="account-circle-outline"
+              size={size}
+              color={color}
+            />
           ),
         }}
       />
