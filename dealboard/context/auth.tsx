@@ -37,13 +37,27 @@ export type AuthUser = {
   cookieExpiration?: number;
 };
 
+export type FieldErrors = {
+  email?: string;
+  password?: string;
+  name?: string;
+  general?: string;
+};
+
 const AuthContext = React.createContext({
   isAuthenticated: false,
   user: null as AuthUser | null,
   onboardingCompleted: null as boolean | null,
   signIn: () => {},
-  signInWithEmail: async (email: string, password: string) => {},
-  signUp: async (email: string, password: string, name: string) => {},
+  signInWithEmail: async (
+    email: string,
+    password: string
+  ): Promise<{ errors?: FieldErrors } | void> => {},
+  signUp: async (
+    email: string,
+    password: string,
+    name: string
+  ): Promise<{ errors?: FieldErrors } | void> => {},
   signOut: () => {},
   isLoading: false,
   error: null as AuthError | null,
@@ -85,10 +99,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   React.useEffect(() => {
     if (!response) return;
 
-    // Create unique ID for this response to prevent duplicate processing
     const responseId = `${response.type}-${Date.now()}`;
 
-    // Skip if we already processed this exact response
     if (responseRef.current === responseId) {
       console.log("Skipping duplicate response processing");
       return;
@@ -127,7 +139,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               const exp = (decoded as any).exp;
               const currentTime = Math.floor(Date.now() / 1000);
 
-              // Check if token is expired
               if (currentTime >= exp) {
                 console.log("Access token expired - attempting refresh");
                 const storedRefreshToken = await tokenCache?.getToken(
@@ -181,7 +192,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 }
               }
 
-              // Verify user still exists in database
               try {
                 const verifyResponse = await fetch(
                   `${SPRING_TUNNEL}/api/auth/verify`,
@@ -193,7 +203,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                   }
                 );
 
-                // User not found or unauthorized - clear session
                 if (
                   verifyResponse.status === 401 ||
                   verifyResponse.status === 403 ||
@@ -211,8 +220,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     `Verification failed: ${verifyResponse.status}`
                   );
                 }
-
-                // Get onboarding status
                 const verifyData = await verifyResponse.json();
                 console.log("verifyData:", verifyData);
                 const userWithOnboarding = {
@@ -220,13 +227,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                   onboardingCompleted: verifyData.onboardingCompleted,
                 };
 
-                // User exists and token is valid
                 setUser(userWithOnboarding);
                 setOnboardingCompleted(verifyData.onboardingCompleted);
               } catch (verifyError) {
                 console.error("Error verifying user:", verifyError);
-                // On network error, still allow user in with cached token
-                // but clear on auth errors
+
                 if (
                   verifyError instanceof Error &&
                   verifyError.message.includes("401")
@@ -262,7 +267,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const { code } = response.params;
       try {
         setIsLoading(true);
-        //exchange code for tokens and fetch user info
 
         const formData = new FormData();
         formData.append("code", code);
@@ -358,13 +362,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.error("Error during sign-in", err);
     }
   };
-  const signInWithEmail = async (email: string, password: string) => {
+  const signInWithEmail = async (
+    email: string,
+    password: string
+  ): Promise<{ errors?: FieldErrors } | void> => {
     try {
-      setIsLoading(true);
       setError(null);
       const baseUrl =
         Platform.OS === "android" ? SPRING_TUNNEL : BASE_SPRING_URL;
-      const response = await fetch(`${baseUrl}/api/auth/login`, {
+      const response = await fetch(`${baseUrl}/api/auth/authenticate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -372,26 +378,78 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       });
 
       if (!response.ok) {
-        throw new Error("Login failed");
+        const errorData = await response.json();
+
+        if (errorData.fieldErrors) {
+          return { errors: errorData.fieldErrors };
+        }
+
+        return {
+          errors: {
+            general: errorData.message || errorData.error || "Błąd logowania",
+          },
+        };
       }
 
       const data = await response.json();
 
       if (isWeb) {
-        setUser(data.user);
+        const userData = data.user || jose.decodeJwt(data.accessToken);
+        setUser(userData as AuthUser);
+
+        try {
+          const onboardingResponse = await fetch(
+            `${baseUrl}/api/user/onboarding-status`,
+            {
+              method: "GET",
+              credentials: "include",
+            }
+          );
+          if (onboardingResponse.ok) {
+            const completed: boolean = await onboardingResponse.json();
+            setOnboardingCompleted(completed);
+          }
+        } catch (e) {
+          console.error("Error fetching onboarding status:", e);
+          setOnboardingCompleted(null);
+        }
       } else {
         await tokenCache?.saveToken(TOKEN_KEY_NAME, data.accessToken);
-        setUser(data.user);
+        const userData = jose.decodeJwt(data.accessToken);
+        setUser(userData as AuthUser);
+
+        try {
+          const onboardingResponse = await fetch(
+            `${baseUrl}/api/user/onboarding-status`,
+            {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${data.accessToken}`,
+                "ngrok-skip-browser-warning": "true",
+              },
+            }
+          );
+          if (onboardingResponse.ok) {
+            const completed: boolean = await onboardingResponse.json();
+            setOnboardingCompleted(completed);
+          }
+        } catch (e) {
+          console.error("Error fetching onboarding status:", e);
+          setOnboardingCompleted(null);
+        }
       }
     } catch (error) {
       console.error("Sign in error:", error);
       setError(error as AuthError);
-    } finally {
-      setIsLoading(false);
+      return { errors: { general: "Wystąpił nieoczekiwany błąd" } };
     }
   };
 
-  const signUp = async (name: string, email: string, password: string) => {
+  const signUp = async (
+    name: string,
+    email: string,
+    password: string
+  ): Promise<{ errors?: FieldErrors } | void> => {
     try {
       setIsLoading(true);
       setError(null);
@@ -410,9 +468,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (!response.ok) {
         const errorData = await response.json();
         console.log("Error response:", errorData);
-        throw new Error(
-          errorData.message || errorData.error || "Registration failed"
-        );
+
+        if (errorData.fieldErrors) {
+          return { errors: errorData.fieldErrors };
+        }
+        return {
+          errors: {
+            general: errorData.message || errorData.error || "Błąd rejestracji",
+          },
+        };
       }
 
       const data = await response.json();
@@ -428,6 +492,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     } catch (error) {
       console.error("Sign up error:", error);
       setError(error as AuthError);
+      return { errors: { general: "Wystąpił nieoczekiwany błąd" } };
     } finally {
       setIsLoading(false);
     }
@@ -448,6 +513,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     setUser(null);
+    setOnboardingCompleted(null);
 
     router.replace("/sign-in");
   };

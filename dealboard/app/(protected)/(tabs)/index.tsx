@@ -11,6 +11,7 @@ import { Text, Card } from "react-native-paper";
 import Swipeable from "react-native-gesture-handler/Swipeable";
 import { Deal } from "@/types/Deal";
 import { useAuth } from "@/context/auth";
+import { useCart } from "@/context/cart";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { SPRING_TUNNEL, TOKEN_KEY_NAME } from "@/utils/constants";
 import { tokenCache } from "@/utils/cache";
@@ -18,6 +19,7 @@ import { authFetch } from "@/utils/authService";
 
 export default function DealsScreen() {
   const { user } = useAuth();
+  const { addToCart } = useCart();
   const [deals, setDeals] = React.useState<Deal[]>([]);
   const [hidden, setHidden] = React.useState<number[]>([]);
   const [page, setPage] = React.useState(0);
@@ -71,7 +73,6 @@ export default function DealsScreen() {
 
       const raw = JSON.parse(text);
 
-      // Spring Page response has { content: [...], totalPages, totalElements, etc }
       if (!Array.isArray(raw.content)) throw new Error("Unexpected payload");
 
       const mapped = raw.content.map(mapRawToDeal);
@@ -97,6 +98,12 @@ export default function DealsScreen() {
 
     try {
       const newDeals = await fetchUserDeals(pageNum);
+
+      // const visibleDeals = newDeals.filter(
+      //   (deal) => !hidden.includes(deal.id!)
+      // );
+
+      // setDeals((prev) => (reset ? visibleDeals : [...prev, ...visibleDeals]));
 
       setDeals((prev) => (reset ? newDeals : [...prev, ...newDeals]));
       setPage(pageNum);
@@ -131,11 +138,11 @@ export default function DealsScreen() {
       loadDeals(0, true);
     }
   };
-  const handleAddDealToCart = async () => {
-    if (!user) return;
+
+  const handleAddDealToCart = async (deal: Deal) => {
+    if (!user || !deal.id) return;
     try {
-      const currentDate = new Date().toISOString();
-      //TODO: add to user's cart
+      addToCart(deal);
     } catch (error) {
       console.error(error);
     }
@@ -199,7 +206,7 @@ export default function DealsScreen() {
                 renderRightActions={() => renderRightActions()}
                 onSwipeableOpen={(direction) => {
                   direction == "right"
-                    ? handleAddDealToCart()
+                    ? handleAddDealToCart(deal)
                     : handleHideDeal(deal.id!);
                   swipeableRefs.current[deal.id!]?.close();
                 }}
@@ -247,6 +254,13 @@ export default function DealsScreen() {
                           <Text style={styles.discountText}>
                             {deal.discountPercentage}% OFF
                           </Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.cardFooter}>
+                      {deal.store && (
+                        <View style={styles.storeBadge}>
+                          <Text style={styles.storeText}>{deal.store}</Text>
                         </View>
                       )}
                     </View>
@@ -306,9 +320,6 @@ const styles = StyleSheet.create({
     //elevation for android
     elevation: 5,
   },
-  cardCompleted: {
-    opacity: 0.5,
-  },
   cardView: {
     marginHorizontal: -8,
     marginVertical: -4,
@@ -327,6 +338,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#1a1a1a",
     lineHeight: 24,
+    paddingLeft: 4,
   },
   priceContainer: {
     flexDirection: "row",
@@ -369,6 +381,18 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     paddingHorizontal: 10,
     paddingVertical: 4,
+  },
+  storeBadge: {
+    backgroundColor: "#d3deffff",
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginTop: 4,
+  },
+  storeText: {
+    fontSize: 12,
+    color: "#04002fff",
+    fontWeight: "600",
   },
   categoryText: {
     fontSize: 12,

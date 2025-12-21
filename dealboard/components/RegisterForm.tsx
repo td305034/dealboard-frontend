@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "@/context/auth";
 import { View, StyleSheet } from "react-native";
-import { Text, Button, TextInput } from "react-native-paper";
+import { Text, Button, TextInput, HelperText } from "react-native-paper";
 import { Link, router } from "expo-router";
 
 export default function RegisterForm() {
@@ -9,16 +9,41 @@ export default function RegisterForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const { signUp, isLoading, error } = useAuth();
-  const [registrationError, setRegistrationError] = useState<string | null>("");
+
+  const [nameError, setNameError] = useState<string>("");
+  const [emailError, setEmailError] = useState<string>("");
+  const [passwordError, setPasswordError] = useState<string>("");
+  const [generalError, setGeneralError] = useState<string>("");
 
   const handleRegister = async () => {
+    // Reset errors
+    setNameError("");
+    setEmailError("");
+    setPasswordError("");
+    setGeneralError("");
+
     if (!name || !email || !password) {
-      setRegistrationError("Please fill all required fields");
+      setGeneralError("Proszę wypełnić wszystkie pola");
       return;
     }
-    setRegistrationError(null);
 
-    await signUp(name, email, password);
+    const result = await signUp(name, email, password);
+
+    // Handle field-specific errors
+    if (result?.errors) {
+      if (result.errors.name) {
+        setNameError(result.errors.name);
+      }
+      if (result.errors.email) {
+        setEmailError(result.errors.email);
+      }
+      if (result.errors.password) {
+        setPasswordError(result.errors.password);
+      }
+      if (result.errors.general) {
+        setGeneralError(result.errors.general);
+      }
+    }
   };
 
   function handleGoToSignIn() {
@@ -31,40 +56,60 @@ export default function RegisterForm() {
         Rejestracja
       </Text>
 
-      <TextInput
-        label="Imię"
-        value={name}
-        onChangeText={setName}
-        style={styles.input}
-        mode="outlined"
-        autoCapitalize="words"
-      />
+      <View style={styles.inputContainer}>
+        <TextInput
+          label="Imię"
+          value={name}
+          onChangeText={(text) => {
+            setName(text);
+            setNameError("");
+          }}
+          mode="outlined"
+          autoCapitalize="words"
+          error={!!nameError}
+        />
+        <HelperText type="error" visible={!!nameError}>
+          {nameError}
+        </HelperText>
+      </View>
 
-      <TextInput
-        label="Email"
-        value={email}
-        onChangeText={setEmail}
-        style={styles.input}
-        mode="outlined"
-        keyboardType="email-address"
-        autoCapitalize="none"
-      />
+      <View style={styles.inputContainer}>
+        <TextInput
+          label="Email"
+          value={email}
+          onChangeText={(text) => {
+            setEmail(text);
+            setEmailError("");
+          }}
+          mode="outlined"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          error={!!emailError}
+        />
+        <HelperText type="error" visible={!!emailError}>
+          {emailError}
+        </HelperText>
+      </View>
 
-      <TextInput
-        label="Hasło"
-        value={password}
-        onChangeText={setPassword}
-        style={styles.input}
-        mode="outlined"
-        secureTextEntry
-        autoCapitalize="none"
-      />
+      <View style={styles.inputContainer}>
+        <TextInput
+          label="Hasło"
+          value={password}
+          onChangeText={(text) => {
+            setPassword(text);
+            setPasswordError("");
+          }}
+          mode="outlined"
+          secureTextEntry
+          autoCapitalize="none"
+          error={!!passwordError}
+        />
+        <HelperText type="error" visible={!!passwordError}>
+          {passwordError}
+        </HelperText>
+      </View>
 
-      {registrationError && (
-        <Text style={styles.error}>
-          {registrationError || "Błąd rejestracji"}
-        </Text>
-      )}
+      {generalError && <Text style={styles.error}>{generalError}</Text>}
 
       <Button
         mode="contained"
@@ -95,6 +140,9 @@ const styles = StyleSheet.create({
   title: {
     marginBottom: 30,
     textAlign: "center",
+  },
+  inputContainer: {
+    marginBottom: 15,
   },
   input: {
     marginBottom: 15,

@@ -4,6 +4,7 @@ import "react-native-url-polyfill/auto";
 
 import { Stack } from "expo-router";
 import { AuthProvider } from "@/context/auth";
+import { CartProvider } from "@/context/cart";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import React from "react";
@@ -13,8 +14,8 @@ export default function RootLayout() {
   console.log("layout2");
   return (
     <AuthProvider>
-      <SafeAreaProvider>
-        <SafeAreaView style={{ flex: 1, paddingTop: 0 }}>
+      <CartProvider>
+        <SafeAreaProvider>
           <GestureHandlerRootView style={{ flex: 1 }}>
             <StatusBar style="auto" />
             <Stack
@@ -23,8 +24,8 @@ export default function RootLayout() {
               }}
             />
           </GestureHandlerRootView>
-        </SafeAreaView>
-      </SafeAreaProvider>
+        </SafeAreaProvider>
+      </CartProvider>
     </AuthProvider>
   );
 }

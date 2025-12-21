@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { useAuth } from "@/context/auth";
 import { View, StyleSheet } from "react-native";
-import { Text, Button, TextInput, Divider } from "react-native-paper";
+import {
+  Text,
+  Button,
+  TextInput,
+  Divider,
+  HelperText,
+} from "react-native-paper";
 import { router } from "expo-router";
 
 export default function LoginForm() {
@@ -9,16 +15,37 @@ export default function LoginForm() {
   const [password, setPassword] = useState("");
   const { signIn, signInWithEmail, isLoading } = useAuth();
 
-  const [error, setError] = useState<string | null>("");
+  const [emailError, setEmailError] = useState<string>("");
+  const [passwordError, setPasswordError] = useState<string>("");
+  const [generalError, setGeneralError] = useState<string>("");
 
   const handleEmailLogin = async () => {
+    // Reset errors
+    setEmailError("");
+    setPasswordError("");
+    setGeneralError("");
+
     if (!email || !password) {
-      setError("Please fill all required fields");
+      setGeneralError("Proszę wypełnić wszystkie pola");
       return;
     }
-    setError(null);
 
-    await signInWithEmail(email, password);
+    const result = await signInWithEmail(email, password);
+
+    // Handle field-specific errors
+    if (result?.errors) {
+      if (result.errors.email) {
+        setEmailError(result.errors.email);
+      }
+      if (result.errors.password) {
+        setPasswordError(result.errors.password);
+      }
+      if (result.errors.general) {
+        setGeneralError(result.errors.general);
+      }
+
+      console.log("Login errors:", result.errors);
+    }
   };
 
   function handleGoToSignUp() {
@@ -31,27 +58,45 @@ export default function LoginForm() {
         Logowanie
       </Text>
 
-      <TextInput
-        label="Email"
-        value={email}
-        onChangeText={setEmail}
-        style={styles.input}
-        mode="outlined"
-        keyboardType="email-address"
-        autoCapitalize="none"
-      />
+      <View>
+        <TextInput
+          label="Email"
+          value={email}
+          onChangeText={(text) => {
+            setEmail(text);
+            setEmailError("");
+          }}
+          style={styles.input}
+          mode="outlined"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          error={!!emailError}
+        />
+        <HelperText type="error" visible={!!emailError}>
+          {emailError || " "}
+        </HelperText>
+      </View>
 
-      <TextInput
-        label="Hasło"
-        value={password}
-        onChangeText={setPassword}
-        style={styles.input}
-        mode="outlined"
-        secureTextEntry
-        autoCapitalize="none"
-      />
+      <View>
+        <TextInput
+          label="Hasło"
+          value={password}
+          onChangeText={(text) => {
+            setPassword(text);
+            setPasswordError("");
+          }}
+          style={styles.input}
+          mode="outlined"
+          secureTextEntry
+          autoCapitalize="none"
+          error={!!passwordError}
+        />
+        <HelperText type="error" visible={!!passwordError}>
+          {passwordError || " "}
+        </HelperText>
+      </View>
 
-      {error && <Text style={styles.error}>{error || "Błąd logowania"}</Text>}
+      {generalError && <Text style={styles.error}>{generalError}</Text>}
 
       <Button
         mode="contained"

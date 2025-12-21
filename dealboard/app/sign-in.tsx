@@ -6,7 +6,8 @@ import { Redirect } from "expo-router";
 export default function SignInScreen() {
   const { user, isLoading, onboardingCompleted } = useAuth();
 
-  if (isLoading || (user && onboardingCompleted === null)) {
+  // Show loading only when checking session, not during login
+  if (!user && onboardingCompleted === null && isLoading) {
     return <LoadingScreen />;
   }
 
@@ -15,7 +16,7 @@ export default function SignInScreen() {
   }
 
   console.log("onboardingCompleted:", onboardingCompleted);
-  if (!onboardingCompleted) {
+  if (onboardingCompleted === false) {
     return <Redirect href="/onboarding" />;
   }
 
