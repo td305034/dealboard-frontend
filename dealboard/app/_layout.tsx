@@ -4,16 +4,26 @@ import "react-native-url-polyfill/auto";
 
 import { Stack } from "expo-router";
 import { AuthProvider } from "@/context/auth";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
+import React from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 export default function RootLayout() {
   console.log("layout2");
   return (
     <AuthProvider>
       <SafeAreaProvider>
-        <StatusBar style="auto" />
-        <Stack />
+        <SafeAreaView style={{ flex: 1, paddingTop: 0 }}>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <StatusBar style="auto" />
+            <Stack
+              screenOptions={{
+                headerShown: false,
+              }}
+            />
+          </GestureHandlerRootView>
+        </SafeAreaView>
       </SafeAreaProvider>
     </AuthProvider>
   );

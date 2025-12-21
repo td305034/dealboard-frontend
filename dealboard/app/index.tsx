@@ -3,18 +3,7 @@ import { useAuth } from "@/context/auth";
 import LoginForm from "@/components/LoginForm";
 import LoadingScreen from "@/components/LoadingScreen";
 import { Redirect } from "expo-router";
+
 export default function HomeScreen() {
-  const { user, isLoading } = useAuth();
-
-  console.log("index");
-
-  if (isLoading) {
-    return <LoadingScreen />;
-  }
-
-  if (!user) {
-    return <LoginForm />;
-  }
-
-  return <Redirect href="/(protected)/(tabs)" />;
+  return <Redirect href="/sign-in" />;
 }

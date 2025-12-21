@@ -3,8 +3,10 @@ export interface Deal {
   name: string;
   store: string;
   category: string;
-  description?: string | null;
-  price?: number | null;
+  promoNotes?: string | null;
+  priceValue?: number | null;
+  priceAlt?: string | null;
   discountPercentage?: number | null;
   imageUrl?: string | null;
+  unit?: string | null;
 }
