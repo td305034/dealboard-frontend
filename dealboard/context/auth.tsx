@@ -25,16 +25,13 @@ if (Platform.OS === "web") {
 }
 
 export type AuthUser = {
-  sub: string;
   email: string;
   name: string;
   picture?: string;
-  given_name?: string;
-  family_name?: string;
-  email_verified?: boolean;
   provider?: string;
   exp?: number;
   cookieExpiration?: number;
+  onboardingCompleted?: boolean;
 };
 
 export type FieldErrors = {
@@ -47,7 +44,6 @@ export type FieldErrors = {
 const AuthContext = React.createContext({
   isAuthenticated: false,
   user: null as AuthUser | null,
-  onboardingCompleted: null as boolean | null,
   signIn: () => {},
   signInWithEmail: async (
     email: string,
@@ -59,6 +55,7 @@ const AuthContext = React.createContext({
     name: string
   ): Promise<{ errors?: FieldErrors } | void> => {},
   signOut: () => {},
+  completeOnboarding: async (): Promise<void> => {},
   isLoading: false,
   error: null as AuthError | null,
 });
@@ -86,9 +83,6 @@ const discovery: DiscoveryDocument = {
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = React.useState<AuthUser | null>(null);
-  const [onboardingCompleted, setOnboardingCompleted] = React.useState<
-    boolean | null
-  >(null);
   const [isLoading, setIsLoading] = React.useState<boolean>(false);
   const [error, setError] = React.useState<AuthError | null>(null);
 
@@ -128,8 +122,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           if (sessionResponse.ok) {
             const userData = await sessionResponse.json();
             setUser(userData as AuthUser);
-            console.log("userData:", userData);
-            setOnboardingCompleted(userData.onboardingCompleted);
           }
         } else {
           let storedAccessToken = await tokenCache?.getToken(TOKEN_KEY_NAME);
@@ -221,14 +213,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                   );
                 }
                 const verifyData = await verifyResponse.json();
-                console.log("verifyData:", verifyData);
-                const userWithOnboarding = {
-                  ...(decoded as AuthUser),
-                  onboardingCompleted: verifyData.onboardingCompleted,
-                };
 
-                setUser(userWithOnboarding);
-                setOnboardingCompleted(verifyData.onboardingCompleted);
+                const user = decoded as AuthUser;
+
+                setUser(user);
               } catch (verifyError) {
                 console.error("Error verifying user:", verifyError);
 
@@ -242,7 +230,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 } else {
                   // Network error - allow cached session
                   setUser(decoded as AuthUser);
-                  setOnboardingCompleted(null);
                 }
               }
             } catch (e) {
@@ -272,12 +259,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         formData.append("code", code);
         if (isWeb) {
           formData.append("platform", "web");
-        } else {
-          console.warn("No code verifier found");
         }
 
         if (request?.codeVerifier) {
           formData.append("code_verifier", request.codeVerifier);
+        } else if (!isWeb) {
+          console.warn("No code verifier found for native platform");
         }
 
         const tokenResponse = await fetch(
@@ -302,7 +289,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             if (sessionResponse.ok) {
               const sessionData = await sessionResponse.json();
               setUser(sessionData as AuthUser);
-              setOnboardingCompleted(sessionData.onboardingCompleted);
             }
           }
         } else {
@@ -324,20 +310,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
           const decoded = jose.decodeJwt(accessToken);
           setUser(decoded as AuthUser);
-
-          const onboardingResponse = await fetch(
-            `${SPRING_TUNNEL}/api/user/onboarding-status`,
-            {
-              method: "GET",
-              credentials: "include",
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                "ngrok-skip-browser-warning": "true",
-              },
-            }
-          );
-          const completed: boolean = await onboardingResponse.json();
-          setOnboardingCompleted(completed);
         }
       } catch (e) {
         console.error(e);
@@ -396,47 +368,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (isWeb) {
         const userData = data.user || jose.decodeJwt(data.accessToken);
         setUser(userData as AuthUser);
-
-        try {
-          const onboardingResponse = await fetch(
-            `${baseUrl}/api/user/onboarding-status`,
-            {
-              method: "GET",
-              credentials: "include",
-            }
-          );
-          if (onboardingResponse.ok) {
-            const completed: boolean = await onboardingResponse.json();
-            setOnboardingCompleted(completed);
-          }
-        } catch (e) {
-          console.error("Error fetching onboarding status:", e);
-          setOnboardingCompleted(null);
-        }
       } else {
         await tokenCache?.saveToken(TOKEN_KEY_NAME, data.accessToken);
         const userData = jose.decodeJwt(data.accessToken);
         setUser(userData as AuthUser);
-
-        try {
-          const onboardingResponse = await fetch(
-            `${baseUrl}/api/user/onboarding-status`,
-            {
-              method: "GET",
-              headers: {
-                Authorization: `Bearer ${data.accessToken}`,
-                "ngrok-skip-browser-warning": "true",
-              },
-            }
-          );
-          if (onboardingResponse.ok) {
-            const completed: boolean = await onboardingResponse.json();
-            setOnboardingCompleted(completed);
-          }
-        } catch (e) {
-          console.error("Error fetching onboarding status:", e);
-          setOnboardingCompleted(null);
-        }
       }
     } catch (error) {
       console.error("Sign in error:", error);
@@ -463,8 +398,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         credentials: isWeb ? "include" : "same-origin",
       });
 
-      console.log("Response status:", response.status);
-
       if (!response.ok) {
         const errorData = await response.json();
         console.log("Error response:", errorData);
@@ -480,14 +413,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       const data = await response.json();
+      const userData = jose.decodeJwt(data.accessToken);
+      setUser(userData as AuthUser);
 
-      if (isWeb) {
-        setUser(data.user);
-        setOnboardingCompleted(false);
-      } else {
+      if (!isWeb) {
         await tokenCache?.saveToken(TOKEN_KEY_NAME, data.accessToken);
-        setUser(data.user);
-        setOnboardingCompleted(false);
       }
     } catch (error) {
       console.error("Sign up error:", error);
@@ -497,6 +427,69 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setIsLoading(false);
     }
   };
+
+  const completeOnboarding = async (): Promise<void> => {
+    try {
+      const baseUrl =
+        Platform.OS === "android" ? SPRING_TUNNEL : BASE_SPRING_URL;
+      const isWeb = Platform.OS === "web";
+
+      if (isWeb) {
+        // Web: backend aktualizuje sesję cookie
+        const response = await fetch(
+          `${baseUrl}/api/user/complete-onboarding`,
+          {
+            method: "POST",
+            credentials: "include",
+          }
+        );
+
+        if (response.ok) {
+          // Pobierz zaktualizowaną sesję
+          const sessionResponse = await fetch(`${baseUrl}/api/auth/session`, {
+            method: "GET",
+            credentials: "include",
+          });
+
+          if (sessionResponse.ok) {
+            const userData = await sessionResponse.json();
+            setUser(userData as AuthUser);
+          }
+        }
+      } else {
+        const token = await tokenCache?.getToken(TOKEN_KEY_NAME);
+        const response = await fetch(
+          `${baseUrl}/api/user/complete-onboarding`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "ngrok-skip-browser-warning": "true",
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+
+          if (data.accessToken) {
+            await tokenCache?.saveToken(TOKEN_KEY_NAME, data.accessToken);
+            const decoded = jose.decodeJwt(data.accessToken);
+            setUser(decoded as AuthUser);
+          } else {
+            setUser((prev) =>
+              prev ? { ...prev, onboardingCompleted: true } : null
+            );
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error completing onboarding:", error);
+      throw error;
+    }
+  };
+
   const signOut = async () => {
     if (isWeb) {
       try {
@@ -513,7 +506,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     setUser(null);
-    setOnboardingCompleted(null);
 
     router.replace("/sign-in");
   };
@@ -523,11 +515,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       value={{
         isAuthenticated: !!user,
         user,
-        onboardingCompleted,
         signIn,
         signInWithEmail,
         signUp,
         signOut,
+        completeOnboarding,
         isLoading,
         error,
       }}

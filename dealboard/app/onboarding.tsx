@@ -162,11 +162,6 @@ export default function OnboardingScreen() {
     try {
       const token = await tokenCache?.getToken(TOKEN_KEY_NAME);
 
-      console.log("Saving preferences...");
-      console.log("Selected products:", Array.from(selectedProducts));
-      console.log("Selected stores:", Array.from(selectedStores));
-
-      // Save tracked products
       const productsResponse = await fetch(
         `${SPRING_TUNNEL}/api/users/tracked-products`,
         {
@@ -180,7 +175,6 @@ export default function OnboardingScreen() {
         }
       );
 
-      console.log("Products save response:", productsResponse.status);
       if (!productsResponse.ok) {
         const errorText = await productsResponse.text();
         console.error("Products save error:", errorText);
@@ -201,14 +195,11 @@ export default function OnboardingScreen() {
         }
       );
 
-      console.log("Stores save response:", storesResponse.status);
       if (!storesResponse.ok) {
         const errorText = await storesResponse.text();
         console.error("Stores save error:", errorText);
         throw new Error(`Failed to save stores: ${storesResponse.status}`);
       }
-
-      console.log("Preferences saved successfully!");
       router.replace("/(protected)/(tabs)");
     } catch (error) {
       console.error("Error saving preferences:", error);

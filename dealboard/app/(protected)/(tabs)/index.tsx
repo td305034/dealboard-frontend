@@ -62,7 +62,7 @@ export default function DealsScreen() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        credentials: "include",
+        credentials: "omit",
       });
 
       const text = await res.text();
@@ -70,14 +70,11 @@ export default function DealsScreen() {
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}: ${text}`);
       }
-
       const raw = JSON.parse(text);
 
       if (!Array.isArray(raw.content)) throw new Error("Unexpected payload");
 
       const mapped = raw.content.map(mapRawToDeal);
-
-      // Check if there are more pages
       const isLastPage = raw.last || raw.content.length < 20;
       setHasMore(!isLastPage);
 
@@ -90,7 +87,7 @@ export default function DealsScreen() {
 
   const loadDeals = async (pageNum: number, reset: boolean = false) => {
     if (loading) return;
-
+    console.log("Loading deals for page:", pageNum);
     setLoading(true);
     if (reset) {
       setInitialLoading(true);

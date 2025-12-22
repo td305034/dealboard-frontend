@@ -8,7 +8,7 @@ export default function RegisterForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const { signUp, isLoading, error } = useAuth();
+  const { signUp, isLoading, error, user } = useAuth();
 
   const [nameError, setNameError] = useState<string>("");
   const [emailError, setEmailError] = useState<string>("");
@@ -43,6 +43,8 @@ export default function RegisterForm() {
       if (result.errors.general) {
         setGeneralError(result.errors.general);
       }
+    } else {
+      router.replace("/");
     }
   };
 
@@ -56,7 +58,7 @@ export default function RegisterForm() {
         Rejestracja
       </Text>
 
-      <View style={styles.inputContainer}>
+      <View>
         <TextInput
           label="Imię"
           value={name}
@@ -64,16 +66,19 @@ export default function RegisterForm() {
             setName(text);
             setNameError("");
           }}
+          style={styles.input}
           mode="outlined"
           autoCapitalize="words"
           error={!!nameError}
         />
-        <HelperText type="error" visible={!!nameError}>
-          {nameError}
-        </HelperText>
+        {nameError && (
+          <HelperText type="error" visible={!!nameError}>
+            {nameError}
+          </HelperText>
+        )}
       </View>
 
-      <View style={styles.inputContainer}>
+      <View>
         <TextInput
           label="Email"
           value={email}
@@ -81,17 +86,20 @@ export default function RegisterForm() {
             setEmail(text);
             setEmailError("");
           }}
+          style={styles.input}
           mode="outlined"
           keyboardType="email-address"
           autoCapitalize="none"
           error={!!emailError}
         />
-        <HelperText type="error" visible={!!emailError}>
-          {emailError}
-        </HelperText>
+        {emailError && (
+          <HelperText type="error" visible={!!emailError}>
+            {emailError}
+          </HelperText>
+        )}
       </View>
 
-      <View style={styles.inputContainer}>
+      <View>
         <TextInput
           label="Hasło"
           value={password}
@@ -99,14 +107,17 @@ export default function RegisterForm() {
             setPassword(text);
             setPasswordError("");
           }}
+          style={styles.input}
           mode="outlined"
           secureTextEntry
           autoCapitalize="none"
           error={!!passwordError}
         />
-        <HelperText type="error" visible={!!passwordError}>
-          {passwordError}
-        </HelperText>
+        {passwordError && (
+          <HelperText type="error" visible={!!passwordError}>
+            {passwordError}
+          </HelperText>
+        )}
       </View>
 
       {generalError && <Text style={styles.error}>{generalError}</Text>}
@@ -140,9 +151,6 @@ const styles = StyleSheet.create({
   title: {
     marginBottom: 30,
     textAlign: "center",
-  },
-  inputContainer: {
-    marginBottom: 15,
   },
   input: {
     marginBottom: 15,

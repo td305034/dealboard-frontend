@@ -4,10 +4,10 @@ import { useAuth } from "@/context/auth";
 import { Redirect } from "expo-router";
 
 export default function SignInScreen() {
-  const { user, isLoading, onboardingCompleted } = useAuth();
+  const { user, isLoading } = useAuth();
 
   // Show loading only when checking session, not during login
-  if (!user && onboardingCompleted === null && isLoading) {
+  if (!user && isLoading) {
     return <LoadingScreen />;
   }
 
@@ -15,8 +15,7 @@ export default function SignInScreen() {
     return <LoginForm />;
   }
 
-  console.log("onboardingCompleted:", onboardingCompleted);
-  if (onboardingCompleted === false) {
+  if (user.onboardingCompleted === false) {
     return <Redirect href="/onboarding" />;
   }
 
