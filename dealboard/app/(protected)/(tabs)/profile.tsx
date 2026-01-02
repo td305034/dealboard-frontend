@@ -10,18 +10,26 @@ import {
   Snackbar,
 } from "react-native-paper";
 import { useState } from "react";
+import { router } from "expo-router";
 
 export default function ProfileScreen() {
-  const { user, signOut, changePassword } = useAuth();
+  const { user, signOut, changePassword, changeName } = useAuth();
   const { width } = useWindowDimensions();
   const [portalVisible, setPortalVisible] = useState(false);
-  const [snackbarVisible, setSnackbarVisible] = useState(true);
+  const [nameDialogVisible, setNameDialogVisible] = useState(false);
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState(
+    "Hasło zostało pomyślnie zmienione."
+  );
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [newName, setNewName] = useState("");
   const [error, setError] = useState("");
+  const [nameError, setNameError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [nameLoading, setNameLoading] = useState(false);
 
   const onShowSnackBar = () => setSnackbarVisible(true);
   const onDismissSnackBar = () => setSnackbarVisible(false);
@@ -55,6 +63,7 @@ export default function ProfileScreen() {
 
     if (result?.success) {
       hideDialog();
+      setSnackbarMessage("Hasło zostało pomyślnie zmienione.");
       onShowSnackBar();
     } else if (result?.fieldErrors) {
       setFieldErrors(result.fieldErrors);
@@ -65,6 +74,40 @@ export default function ProfileScreen() {
     setLoading(false);
   };
 
+  const showNameDialog = () => {
+    setNewName(user?.name || "");
+    setNameDialogVisible(true);
+  };
+
+  const hideNameDialog = () => {
+    setNameDialogVisible(false);
+    setNewName("");
+    setNameError("");
+  };
+
+  const handleChangeName = async () => {
+    setNameLoading(true);
+    setNameError("");
+
+    if (!newName || newName.trim() === "") {
+      setNameError("Imię nie może być puste");
+      setNameLoading(false);
+      return;
+    }
+
+    const result = await changeName(newName);
+
+    if (result?.success) {
+      hideNameDialog();
+      setSnackbarMessage("Imię zostało pomyślnie zmienione.");
+      onShowSnackBar();
+    } else if (result?.error) {
+      setNameError(result.error);
+    }
+
+    setNameLoading(false);
+  };
+
   return (
     <View style={styles.container}>
       <Text variant="headlineMedium" style={styles.title}>
@@ -72,6 +115,19 @@ export default function ProfileScreen() {
       </Text>
 
       <UserCard />
+
+      <Text variant="titleMedium" style={styles.sectionTitle}>
+        Ustawienia konta
+      </Text>
+
+      <Button
+        mode="contained"
+        onPress={showNameDialog}
+        style={styles.button}
+        buttonColor="#7868f5ff"
+      >
+        Zmień imię
+      </Button>
 
       {user?.provider === "LOCAL" && (
         <Button
@@ -84,6 +140,28 @@ export default function ProfileScreen() {
         </Button>
       )}
 
+      <Text variant="titleMedium" style={styles.sectionTitle}>
+        Preferencje
+      </Text>
+
+      <Button
+        mode="contained"
+        onPress={() => router.push("/edit-products")}
+        style={styles.button}
+        buttonColor="#7868f5ff"
+      >
+        Moje produkty
+      </Button>
+
+      <Button
+        mode="contained"
+        onPress={() => router.push("/edit-stores")}
+        style={styles.button}
+        buttonColor="#7868f5ff"
+      >
+        Moje sklepy
+      </Button>
+
       <Button
         mode="contained"
         onPress={signOut}
@@ -94,6 +172,32 @@ export default function ProfileScreen() {
       </Button>
 
       <Portal>
+        <Dialog visible={nameDialogVisible} onDismiss={hideNameDialog}>
+          <Dialog.Title>Zmiana imienia</Dialog.Title>
+          <Dialog.Content>
+            <TextInput
+              label="Nowe imię"
+              value={newName}
+              onChangeText={setNewName}
+              mode="outlined"
+              style={styles.input}
+            />
+            {nameError ? <Text style={styles.error}>{nameError}</Text> : null}
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={hideNameDialog} disabled={nameLoading}>
+              Anuluj
+            </Button>
+            <Button
+              onPress={handleChangeName}
+              loading={nameLoading}
+              disabled={nameLoading}
+            >
+              Zatwierdź
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+
         <Dialog visible={portalVisible} onDismiss={hideDialog}>
           <Dialog.Title>Zmiana hasła</Dialog.Title>
           <Dialog.Content>
@@ -155,7 +259,7 @@ export default function ProfileScreen() {
           },
         }}
       >
-        Hasło zostało pomyślnie zmienione.
+        {snackbarMessage}
       </Snackbar>
     </View>
   );
@@ -170,6 +274,11 @@ const styles = StyleSheet.create({
   title: {
     marginTop: 20,
     marginBottom: 20,
+  },
+  sectionTitle: {
+    marginTop: 20,
+    marginBottom: 10,
+    fontWeight: "600",
   },
   button: {
     marginTop: 10,

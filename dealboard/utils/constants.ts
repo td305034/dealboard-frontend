@@ -53,3 +53,46 @@ export const REFRESH_COOKIE_OPTIONS = {
   path: "/api/auth/refresh", // Restrict to refresh endpoint only
   maxAge: REFRESH_TOKEN_MAX_AGE,
 };
+
+// Popular Products for Onboarding
+export const POPULAR_PRODUCTS = [
+  // Dairy
+  "mleko",
+  "ser",
+  "masło",
+  "jogurt",
+  "śmietana",
+  "twaróg",
+  // Bread & Bakery
+  "chleb",
+  "bułka",
+  "rogal",
+  "croissant",
+  // Meat
+  "kurczak",
+  "wieprzowina",
+  "wołowina",
+  "kiełbasa",
+  "szynka",
+  // Beverages
+  "kawa",
+  "herbata",
+  "sok",
+  "woda",
+  "cola",
+  "piwo",
+  // Fruits & Vegetables
+  "jabłko",
+  "banan",
+  "pomarańcza",
+  "ziemniaki",
+  "pomidor",
+  "ogórek",
+  // Other
+  "jajka",
+  "mąka",
+  "cukier",
+  "ryż",
+  "makaron",
+  "olej",
+];

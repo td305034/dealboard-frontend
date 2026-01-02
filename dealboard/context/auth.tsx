@@ -66,6 +66,12 @@ const AuthContext = React.createContext({
     error?: string;
     fieldErrors?: Record<string, string>;
   } | void> => {},
+  changeName: async (
+    newName: string
+  ): Promise<{
+    success?: boolean;
+    error?: string;
+  } | void> => {},
   isLoading: false,
   error: null as AuthError | null,
 });
@@ -121,7 +127,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const responseId = `${response.type}-${Date.now()}`;
 
     if (responseRef.current === responseId) {
-      console.log("Skipping duplicate response processing");
+      //Skipping duplicate response processing
       return;
     }
 
@@ -143,13 +149,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             const currentTime = Math.floor(Date.now() / 1000);
 
             if (currentTime >= exp) {
-              console.log("Access token expired - attempting refresh");
               const storedRefreshToken = await tokenCache?.getToken(
                 REFRESH_TOKEN_KEY_NAME
               );
 
               if (!storedRefreshToken) {
-                console.log("No refresh token - clearing session");
                 await tokenCache?.deleteToken(TOKEN_KEY_NAME);
                 setUser(null);
                 return;
@@ -171,9 +175,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 );
 
                 if (!refreshResponse.ok) {
-                  console.log(
-                    "Refresh token expired or invalid - clearing session"
-                  );
                   await tokenCache?.deleteToken(TOKEN_KEY_NAME);
                   await tokenCache?.deleteToken(REFRESH_TOKEN_KEY_NAME);
                   setUser(null);
@@ -185,7 +186,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 await tokenCache?.saveToken(TOKEN_KEY_NAME, newAccessToken);
                 storedAccessToken = newAccessToken;
                 decoded = jose.decodeJwt(newAccessToken);
-                console.log("Access token refreshed successfully");
               } catch (refreshError) {
                 console.error("Error refreshing token:", refreshError);
                 await tokenCache?.deleteToken(TOKEN_KEY_NAME);
@@ -211,7 +211,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 verifyResponse.status === 403 ||
                 verifyResponse.status === 404
               ) {
-                console.log("User not found in database - clearing session");
+                console.warn("User not found in database - clearing session");
                 await tokenCache?.deleteToken(TOKEN_KEY_NAME);
                 await tokenCache?.deleteToken(REFRESH_TOKEN_KEY_NAME);
                 setUser(null);
@@ -326,13 +326,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setError(response.error as AuthError);
       console.error("Authentication error", response.error);
     } else {
-      console.log("Authentication cancelled or unknown response type");
+      console.warn("Authentication cancelled or unknown response type");
     }
   };
   const signIn = async () => {
     try {
       if (!request) {
-        console.log("No request");
+        console.error("No request");
         return;
       }
       await promptAsync();
@@ -410,7 +410,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.log("Error response:", errorData);
+        console.error("Error response:", errorData);
 
         if (errorData.fieldErrors) {
           return { errors: errorData.fieldErrors };
@@ -535,6 +535,57 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const changeName = async (
+    newName: string
+  ): Promise<{
+    success?: boolean;
+    error?: string;
+  } | void> => {
+    try {
+      const response = await authFetch(
+        `${isWeb ? BASE_SPRING_URL : SPRING_TUNNEL}/api/users/change-name`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "true",
+          },
+          body: JSON.stringify({ name: newName }),
+        }
+      );
+
+      if (!response.ok) {
+        let errorMessage = "Błąd zmiany imienia";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch {
+          const errorText = await response.text();
+          errorMessage = errorText || `Błąd ${response.status}`;
+        }
+        return { error: errorMessage };
+      }
+
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        return { success: true };
+      }
+
+      if (data.accessToken) {
+        await tokenCache?.saveToken(TOKEN_KEY_NAME, data.accessToken);
+        const decoded = jose.decodeJwt(data.accessToken);
+        setUser(decoded as AuthUser);
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error("Change name error:", error);
+      return { error: "Wystąpił nieoczekiwany błąd" };
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -546,6 +597,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         signOut,
         completeOnboarding,
         changePassword,
+        changeName,
         isLoading,
         error,
       }}
