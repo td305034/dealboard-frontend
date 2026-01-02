@@ -8,11 +8,14 @@ export default function RegisterForm() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const { signUp, isLoading, error, user } = useAuth();
+  const [repeatedPassword, setRepeatedPassword] = useState("");
+  const { signUp, isLoading } = useAuth();
 
   const [nameError, setNameError] = useState<string>("");
   const [emailError, setEmailError] = useState<string>("");
   const [passwordError, setPasswordError] = useState<string>("");
+  const [repeatedPasswordError, setRepeatedPasswordError] =
+    useState<string>("");
   const [generalError, setGeneralError] = useState<string>("");
 
   const handleRegister = async () => {
@@ -21,12 +24,15 @@ export default function RegisterForm() {
     setEmailError("");
     setPasswordError("");
     setGeneralError("");
+    setRepeatedPasswordError("");
 
     if (!name || !email || !password) {
       setGeneralError("Proszę wypełnić wszystkie pola");
       return;
     }
 
+    if (password !== repeatedPassword)
+      setRepeatedPasswordError("Powtórzone hasło jest inne niż hasło!");
     const result = await signUp(name, email, password);
 
     // Handle field-specific errors
@@ -116,6 +122,26 @@ export default function RegisterForm() {
         {passwordError && (
           <HelperText type="error" visible={!!passwordError}>
             {passwordError}
+          </HelperText>
+        )}
+      </View>
+      <View>
+        <TextInput
+          label="Powtórz hasło"
+          value={repeatedPassword}
+          onChangeText={(text) => {
+            setRepeatedPassword(text);
+            setRepeatedPasswordError("");
+          }}
+          style={styles.input}
+          mode="outlined"
+          secureTextEntry
+          autoCapitalize="none"
+          error={!!repeatedPasswordError}
+        />
+        {repeatedPasswordError && (
+          <HelperText type="error" visible={!!repeatedPasswordError}>
+            {repeatedPasswordError}
           </HelperText>
         )}
       </View>

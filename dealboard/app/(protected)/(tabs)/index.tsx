@@ -6,8 +6,9 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   ActivityIndicator,
+  Platform,
 } from "react-native";
-import { Text, Card } from "react-native-paper";
+import { Text } from "react-native-paper";
 import Swipeable from "react-native-gesture-handler/Swipeable";
 import { Deal } from "@/types/Deal";
 import { useAuth } from "@/context/auth";
@@ -16,6 +17,24 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { SPRING_TUNNEL, TOKEN_KEY_NAME } from "@/utils/constants";
 import { tokenCache } from "@/utils/cache";
 import { authFetch } from "@/utils/authService";
+import DealCard from "@/components/DealCard";
+
+function mapRawToDeal(raw: any): Deal {
+  return {
+    id: raw.id == null ? undefined : Number(raw.id),
+    name: String(raw.name),
+    store: String(raw.store),
+    category: String(raw.category),
+    promoNotes: raw.promo_notes ?? null,
+    priceValue: raw.price_value == null ? null : Number(raw.price_value),
+    priceAlt: raw.price_alt ?? null,
+    discountPercentage:
+      raw.discount_percent == null ? null : Number(raw.discount_percent),
+    imageUrl: raw.imageUrl ?? null,
+    unit: raw.unit ?? null,
+    hasNotification: raw.hasNotification ?? false,
+  };
+}
 
 export default function DealsScreen() {
   const { user } = useAuth();
@@ -36,22 +55,6 @@ export default function DealsScreen() {
     }
   }, [user]);
 
-  function mapRawToDeal(raw: any): Deal {
-    return {
-      id: raw.id == null ? undefined : Number(raw.id),
-      name: String(raw.name),
-      store: String(raw.store),
-      category: String(raw.category),
-      promoNotes: raw.promo_notes ?? null,
-      priceValue: raw.price_value == null ? null : Number(raw.price_value),
-      priceAlt: raw.price_alt ?? null,
-      discountPercentage:
-        raw.discount_percent == null ? null : Number(raw.discount_percent),
-      imageUrl: raw.imageUrl ?? null,
-      unit: raw.unit ?? null,
-    };
-  }
-
   async function fetchUserDeals(pageNum: number): Promise<Deal[]> {
     try {
       const token = await tokenCache?.getToken(TOKEN_KEY_NAME);
@@ -60,9 +63,7 @@ export default function DealsScreen() {
         headers: {
           "ngrok-skip-browser-warning": "true",
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
-        credentials: "omit",
       });
 
       const text = await res.text();
@@ -87,7 +88,6 @@ export default function DealsScreen() {
 
   const loadDeals = async (pageNum: number, reset: boolean = false) => {
     if (loading) return;
-    console.log("Loading deals for page:", pageNum);
     setLoading(true);
     if (reset) {
       setInitialLoading(true);
@@ -208,61 +208,7 @@ export default function DealsScreen() {
                   swipeableRefs.current[deal.id!]?.close();
                 }}
               >
-                <Card style={[styles.card]}>
-                  <View style={styles.cardView}>
-                    <View style={styles.cardHeader}>
-                      <Text style={styles.cardTitle} numberOfLines={2}>
-                        {deal.name}
-                      </Text>
-                      <View style={styles.priceContainer}>
-                        <Text style={styles.priceValue}>
-                          {deal.priceValue !== null &&
-                          deal.priceValue !== undefined
-                            ? `${deal.priceValue.toFixed(2)}zł`
-                            : deal.priceAlt || "N/A"}
-                        </Text>
-                        {deal.unit && (
-                          <Text style={styles.priceUnit}>/{deal.unit}</Text>
-                        )}
-                      </View>
-                    </View>
-
-                    {deal.promoNotes && (
-                      <Text style={styles.cardDesc} numberOfLines={2}>
-                        {deal.promoNotes}
-                      </Text>
-                    )}
-
-                    <View style={styles.cardFooter}>
-                      {deal.category && (
-                        <View style={styles.categoryBadge}>
-                          <Text style={styles.categoryText}>
-                            {deal.category}
-                          </Text>
-                        </View>
-                      )}
-                      {deal.discountPercentage !== null && (
-                        <View style={styles.discountBadge}>
-                          <MaterialCommunityIcons
-                            name="tag"
-                            size={14}
-                            color="#d32f2f"
-                          />
-                          <Text style={styles.discountText}>
-                            {deal.discountPercentage}% OFF
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                    <View style={styles.cardFooter}>
-                      {deal.store && (
-                        <View style={styles.storeBadge}>
-                          <Text style={styles.storeText}>{deal.store}</Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                </Card>
+                <DealCard {...deal} />
               </Swipeable>
             ))
           )}

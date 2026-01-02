@@ -43,8 +43,6 @@ export default function LoginForm() {
       if (result.errors.general) {
         setGeneralError(result.errors.general);
       }
-
-      console.log("Login errors:", result.errors);
     }
   };
 

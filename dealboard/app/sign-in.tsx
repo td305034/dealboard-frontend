@@ -1,12 +1,12 @@
 import LoadingScreen from "@/components/LoadingScreen";
 import LoginForm from "@/components/LoginForm";
 import { useAuth } from "@/context/auth";
+import { tokenCache } from "@/utils/cache";
+import { REFRESH_TOKEN_KEY_NAME, TOKEN_KEY_NAME } from "@/utils/constants";
 import { Redirect } from "expo-router";
 
 export default function SignInScreen() {
   const { user, isLoading } = useAuth();
-
-  // Show loading only when checking session, not during login
   if (!user && isLoading) {
     return <LoadingScreen />;
   }

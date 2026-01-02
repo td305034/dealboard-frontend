@@ -15,13 +15,6 @@ export default function TabsLayout() {
           headerRight: () => (
             <CartButton onPress={() => setCartModalVisible(true)} />
           ),
-          tabBarStyle: {
-            backgroundColor: "#f5f5f5",
-            borderTopWidth: 0,
-            elevation: 0,
-            shadowOpacity: 0.5,
-            paddingTop: 0,
-          },
           tabBarInactiveTintColor: "#666",
         }}
       >

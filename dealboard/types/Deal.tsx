@@ -9,4 +9,5 @@ export interface Deal {
   discountPercentage?: number | null;
   imageUrl?: string | null;
   unit?: string | null;
+  hasNotification?: boolean;
 }

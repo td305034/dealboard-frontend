@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { Text, Button } from "react-native-paper";
 import { SPRING_TUNNEL, TOKEN_KEY_NAME } from "@/utils/constants";
@@ -13,6 +14,9 @@ import { tokenCache } from "@/utils/cache";
 import { router } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { authFetch } from "@/utils/authService";
+import { useAuth } from "@/context/auth";
+import * as jose from "jose";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const POPULAR_PRODUCTS = [
   // Dairy
@@ -62,6 +66,7 @@ interface StoreData {
 }
 
 export default function OnboardingScreen() {
+  const { completeOnboarding } = useAuth();
   const [step, setStep] = useState(1);
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(
     new Set()
@@ -98,11 +103,9 @@ export default function OnboardingScreen() {
   const fetchStores = async () => {
     setLoadingStores(true);
     try {
-      const token = await tokenCache?.getToken(TOKEN_KEY_NAME);
       const response = await authFetch(`${SPRING_TUNNEL}/api/stores`, {
         headers: {
           "ngrok-skip-browser-warning": "true",
-          Authorization: `Bearer ${token}`,
         },
       });
 
@@ -160,16 +163,13 @@ export default function OnboardingScreen() {
 
     setLoading(true);
     try {
-      const token = await tokenCache?.getToken(TOKEN_KEY_NAME);
-
-      const productsResponse = await fetch(
+      const productsResponse = await authFetch(
         `${SPRING_TUNNEL}/api/users/tracked-products`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "ngrok-skip-browser-warning": "true",
-            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify(Array.from(selectedProducts)),
         }
@@ -182,14 +182,13 @@ export default function OnboardingScreen() {
       }
 
       // Save selected stores
-      const storesResponse = await fetch(
+      const storesResponse = await authFetch(
         `${SPRING_TUNNEL}/api/users/selected-stores`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "ngrok-skip-browser-warning": "true",
-            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify(Array.from(selectedStores)),
         }
@@ -200,6 +199,10 @@ export default function OnboardingScreen() {
         console.error("Stores save error:", errorText);
         throw new Error(`Failed to save stores: ${storesResponse.status}`);
       }
+
+      completeOnboarding();
+      console.log("Onboarding completed, navigating to main app");
+
       router.replace("/(protected)/(tabs)");
     } catch (error) {
       console.error("Error saving preferences:", error);
@@ -212,7 +215,7 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["bottom"]}>
       <View style={styles.header}>
         <Text style={styles.title}>
           {step === 1 ? "Wybierz produkty" : "Wybierz sklepy"}
@@ -381,7 +384,7 @@ export default function OnboardingScreen() {
           </Button>
         </View>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 

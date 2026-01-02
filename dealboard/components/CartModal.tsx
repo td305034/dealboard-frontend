@@ -31,7 +31,7 @@ export default function CartModal({ visible, onClose }: CartModalProps) {
             {deal.name}
           </Text>
           <Text variant="bodySmall" style={styles.store}>
-            {deal.category}
+            {deal.store}
           </Text>
           {deal.priceValue && (
             <Text variant="bodyLarge" style={styles.price}>

@@ -18,6 +18,8 @@ import { Platform } from "react-native";
 import { tokenCache } from "@/utils/cache";
 import * as jose from "jose";
 import { router } from "expo-router";
+import { authFetch, registerPushToken } from "@/utils/authService";
+import { useNotification } from "./notification";
 
 // Only complete auth session on web - Expo Router handles deep links on native
 if (Platform.OS === "web") {
@@ -56,6 +58,14 @@ const AuthContext = React.createContext({
   ): Promise<{ errors?: FieldErrors } | void> => {},
   signOut: () => {},
   completeOnboarding: async (): Promise<void> => {},
+  changePassword: async (
+    oldPassword: string,
+    newPassword: string
+  ): Promise<{
+    success?: boolean;
+    error?: string;
+    fieldErrors?: Record<string, string>;
+  } | void> => {},
   isLoading: false,
   error: null as AuthError | null,
 });
@@ -85,10 +95,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = React.useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = React.useState<boolean>(false);
   const [error, setError] = React.useState<AuthError | null>(null);
+  const { expoPushToken } = useNotification();
 
   const [request, response, promptAsync] = useAuthRequest(config, discovery);
   const isWeb = Platform.OS === "web";
   const responseRef = React.useRef<string | null>(null);
+
+  // Helper function to register push token
+  const registerPushTokenIfPossible = React.useCallback(async () => {
+    if (Platform.OS === "web") return;
+    if (!expoPushToken) {
+      return;
+    }
+
+    try {
+      await registerPushToken(expoPushToken);
+    } catch (error) {
+      console.error("Failed to register push token:", error);
+    }
+  }, [expoPushToken]);
 
   React.useEffect(() => {
     if (!response) return;
@@ -110,134 +135,122 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const restoreSession = async () => {
       setIsLoading(true);
       try {
-        if (isWeb) {
-          const sessionResponse = await fetch(
-            `${BASE_SPRING_URL}/api/auth/session`,
-            {
-              method: "GET",
-              credentials: "include",
-            }
-          );
+        let storedAccessToken = await tokenCache?.getToken(TOKEN_KEY_NAME);
+        if (storedAccessToken) {
+          try {
+            let decoded = jose.decodeJwt(storedAccessToken);
+            const exp = (decoded as any).exp;
+            const currentTime = Math.floor(Date.now() / 1000);
 
-          if (sessionResponse.ok) {
-            const userData = await sessionResponse.json();
-            setUser(userData as AuthUser);
-          }
-        } else {
-          let storedAccessToken = await tokenCache?.getToken(TOKEN_KEY_NAME);
-          if (storedAccessToken) {
-            try {
-              let decoded = jose.decodeJwt(storedAccessToken);
-              const exp = (decoded as any).exp;
-              const currentTime = Math.floor(Date.now() / 1000);
+            if (currentTime >= exp) {
+              console.log("Access token expired - attempting refresh");
+              const storedRefreshToken = await tokenCache?.getToken(
+                REFRESH_TOKEN_KEY_NAME
+              );
 
-              if (currentTime >= exp) {
-                console.log("Access token expired - attempting refresh");
-                const storedRefreshToken = await tokenCache?.getToken(
-                  REFRESH_TOKEN_KEY_NAME
-                );
-
-                if (!storedRefreshToken) {
-                  console.log("No refresh token - clearing session");
-                  await tokenCache?.deleteToken(TOKEN_KEY_NAME);
-                  setUser(null);
-                  return;
-                }
-
-                try {
-                  const refreshResponse = await fetch(
-                    `${SPRING_TUNNEL}/api/auth/refresh`,
-                    {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
-                        "ngrok-skip-browser-warning": "true",
-                      },
-                      body: JSON.stringify({
-                        refreshToken: storedRefreshToken,
-                      }),
-                    }
-                  );
-
-                  if (!refreshResponse.ok) {
-                    console.log(
-                      "Refresh token expired or invalid - clearing session"
-                    );
-                    await tokenCache?.deleteToken(TOKEN_KEY_NAME);
-                    await tokenCache?.deleteToken(REFRESH_TOKEN_KEY_NAME);
-                    setUser(null);
-                    return;
-                  }
-
-                  const { accessToken: newAccessToken } =
-                    await refreshResponse.json();
-                  await tokenCache?.saveToken(TOKEN_KEY_NAME, newAccessToken);
-                  storedAccessToken = newAccessToken;
-                  decoded = jose.decodeJwt(newAccessToken);
-                  console.log("Access token refreshed successfully");
-                } catch (refreshError) {
-                  console.error("Error refreshing token:", refreshError);
-                  await tokenCache?.deleteToken(TOKEN_KEY_NAME);
-                  await tokenCache?.deleteToken(REFRESH_TOKEN_KEY_NAME);
-                  setUser(null);
-                  return;
-                }
+              if (!storedRefreshToken) {
+                console.log("No refresh token - clearing session");
+                await tokenCache?.deleteToken(TOKEN_KEY_NAME);
+                setUser(null);
+                return;
               }
 
               try {
-                const verifyResponse = await fetch(
-                  `${SPRING_TUNNEL}/api/auth/verify`,
+                const refreshResponse = await fetch(
+                  `${isWeb ? BASE_SPRING_URL : SPRING_TUNNEL}/api/auth/refresh`,
                   {
+                    method: "POST",
                     headers: {
+                      "Content-Type": "application/json",
                       "ngrok-skip-browser-warning": "true",
-                      Authorization: `Bearer ${storedAccessToken}`,
                     },
+                    body: JSON.stringify({
+                      refreshToken: storedRefreshToken,
+                    }),
                   }
                 );
 
-                if (
-                  verifyResponse.status === 401 ||
-                  verifyResponse.status === 403 ||
-                  verifyResponse.status === 404
-                ) {
-                  console.log("User not found in database - clearing session");
+                if (!refreshResponse.ok) {
+                  console.log(
+                    "Refresh token expired or invalid - clearing session"
+                  );
                   await tokenCache?.deleteToken(TOKEN_KEY_NAME);
                   await tokenCache?.deleteToken(REFRESH_TOKEN_KEY_NAME);
                   setUser(null);
                   return;
                 }
 
-                if (!verifyResponse.ok) {
-                  throw new Error(
-                    `Verification failed: ${verifyResponse.status}`
-                  );
-                }
-                const verifyData = await verifyResponse.json();
-
-                const user = decoded as AuthUser;
-
-                setUser(user);
-              } catch (verifyError) {
-                console.error("Error verifying user:", verifyError);
-
-                if (
-                  verifyError instanceof Error &&
-                  verifyError.message.includes("401")
-                ) {
-                  await tokenCache?.deleteToken(TOKEN_KEY_NAME);
-                  await tokenCache?.deleteToken(REFRESH_TOKEN_KEY_NAME);
-                  setUser(null);
-                } else {
-                  // Network error - allow cached session
-                  setUser(decoded as AuthUser);
-                }
+                const { accessToken: newAccessToken } =
+                  await refreshResponse.json();
+                await tokenCache?.saveToken(TOKEN_KEY_NAME, newAccessToken);
+                storedAccessToken = newAccessToken;
+                decoded = jose.decodeJwt(newAccessToken);
+                console.log("Access token refreshed successfully");
+              } catch (refreshError) {
+                console.error("Error refreshing token:", refreshError);
+                await tokenCache?.deleteToken(TOKEN_KEY_NAME);
+                await tokenCache?.deleteToken(REFRESH_TOKEN_KEY_NAME);
+                setUser(null);
+                return;
               }
-            } catch (e) {
-              console.error("Error decoding token:", e);
-              await tokenCache?.deleteToken(TOKEN_KEY_NAME);
-              await tokenCache?.deleteToken(REFRESH_TOKEN_KEY_NAME);
-              setUser(null);
             }
+
+            try {
+              const verifyResponse = await fetch(
+                `${isWeb ? BASE_SPRING_URL : SPRING_TUNNEL}/api/auth/verify`,
+                {
+                  headers: {
+                    "ngrok-skip-browser-warning": "true",
+                    Authorization: `Bearer ${storedAccessToken}`,
+                  },
+                }
+              );
+
+              if (
+                verifyResponse.status === 401 ||
+                verifyResponse.status === 403 ||
+                verifyResponse.status === 404
+              ) {
+                console.log("User not found in database - clearing session");
+                await tokenCache?.deleteToken(TOKEN_KEY_NAME);
+                await tokenCache?.deleteToken(REFRESH_TOKEN_KEY_NAME);
+                setUser(null);
+                return;
+              }
+
+              if (!verifyResponse.ok) {
+                throw new Error(
+                  `Verification failed: ${verifyResponse.status}`
+                );
+              }
+              const verifyData = await verifyResponse.json();
+
+              const user = decoded as AuthUser;
+
+              setUser(user);
+
+              // Register push token after session restoration
+              await registerPushTokenIfPossible();
+            } catch (verifyError) {
+              console.error("Error verifying user:", verifyError);
+
+              if (
+                verifyError instanceof Error &&
+                verifyError.message.includes("401")
+              ) {
+                await tokenCache?.deleteToken(TOKEN_KEY_NAME);
+                await tokenCache?.deleteToken(REFRESH_TOKEN_KEY_NAME);
+                setUser(null);
+              } else {
+                // Network error - allow cached session
+                setUser(decoded as AuthUser);
+              }
+            }
+          } catch (e) {
+            console.error("Error decoding token:", e);
+            await tokenCache?.deleteToken(TOKEN_KEY_NAME);
+            await tokenCache?.deleteToken(REFRESH_TOKEN_KEY_NAME);
+            setUser(null);
           }
         }
       } catch (e) {
@@ -248,7 +261,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     };
     restoreSession();
-  }, [isWeb]);
+  }, []);
+
+  // Register push token when it becomes available and user is authenticated
+  React.useEffect(() => {
+    if (user && expoPushToken && Platform.OS !== "web") {
+      registerPushTokenIfPossible();
+    }
+  }, [expoPushToken, user, registerPushTokenIfPossible]);
+
   const handleResponse = async () => {
     if (response?.type === "success") {
       const { code } = response.params;
@@ -272,45 +293,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           {
             method: "POST",
             body: formData,
-            credentials: isWeb ? "include" : "same-origin",
           }
         );
-        if (isWeb) {
-          const userData = await tokenResponse.json();
 
-          if (userData.success) {
-            const sessionResponse = await fetch(
-              `${BASE_SPRING_URL}/api/auth/session`,
-              {
-                method: "GET",
-                credentials: "include",
-              }
-            );
-            if (sessionResponse.ok) {
-              const sessionData = await sessionResponse.json();
-              setUser(sessionData as AuthUser);
-            }
-          }
-        } else {
-          const token = await tokenResponse.json();
-          const accessToken = token.accessToken;
-          const refreshToken = token.refreshToken;
+        const token = await tokenResponse.json();
+        const accessToken = token.accessToken;
+        const refreshToken = token.refreshToken;
 
-          if (!accessToken) {
-            console.error("No access token received");
-            return;
-          }
-          if (!refreshToken) {
-            console.error("No refresh token received");
-            return;
-          }
-
-          tokenCache?.saveToken(TOKEN_KEY_NAME, accessToken);
-          tokenCache?.saveToken(REFRESH_TOKEN_KEY_NAME, refreshToken);
-
-          const decoded = jose.decodeJwt(accessToken);
-          setUser(decoded as AuthUser);
+        if (!accessToken) {
+          console.error("No access token received");
+          return;
         }
+        if (!refreshToken) {
+          console.error("No refresh token received");
+          return;
+        }
+
+        await tokenCache?.saveToken(TOKEN_KEY_NAME, accessToken);
+        await tokenCache?.saveToken(REFRESH_TOKEN_KEY_NAME, refreshToken);
+
+        const decoded = jose.decodeJwt(accessToken);
+        setUser(decoded as AuthUser);
+
+        // Register push token after OAuth sign in
+        await registerPushTokenIfPossible();
       } catch (e) {
         console.error(e);
       } finally {
@@ -340,14 +346,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   ): Promise<{ errors?: FieldErrors } | void> => {
     try {
       setError(null);
-      const baseUrl =
-        Platform.OS === "android" ? SPRING_TUNNEL : BASE_SPRING_URL;
-      const response = await fetch(`${baseUrl}/api/auth/authenticate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-        credentials: isWeb ? "include" : "same-origin",
-      });
+      const response = await fetch(
+        `${isWeb ? BASE_SPRING_URL : SPRING_TUNNEL}/api/auth/authenticate`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        }
+      );
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -365,14 +371,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       const data = await response.json();
 
-      if (isWeb) {
-        const userData = data.user || jose.decodeJwt(data.accessToken);
-        setUser(userData as AuthUser);
-      } else {
+      if (!isWeb) {
+        // First clear any old tokens to avoid race conditions
+        await tokenCache?.deleteToken(TOKEN_KEY_NAME);
+        await tokenCache?.deleteToken(REFRESH_TOKEN_KEY_NAME);
+        // Then save new tokens
         await tokenCache?.saveToken(TOKEN_KEY_NAME, data.accessToken);
-        const userData = jose.decodeJwt(data.accessToken);
-        setUser(userData as AuthUser);
+        await tokenCache?.saveToken(REFRESH_TOKEN_KEY_NAME, data.refreshToken);
       }
+      const userData = jose.decodeJwt(data.accessToken);
+      setUser(userData as AuthUser);
+
+      // Register push token after sign in
+      await registerPushTokenIfPossible();
     } catch (error) {
       console.error("Sign in error:", error);
       setError(error as AuthError);
@@ -395,7 +406,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, password }),
-        credentials: isWeb ? "include" : "same-origin",
       });
 
       if (!response.ok) {
@@ -413,12 +423,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       const data = await response.json();
+      if (!isWeb) {
+        // First clear any old tokens to avoid race conditions
+        await tokenCache?.deleteToken(TOKEN_KEY_NAME);
+        await tokenCache?.deleteToken(REFRESH_TOKEN_KEY_NAME);
+        // Then save new tokens
+        await tokenCache?.saveToken(TOKEN_KEY_NAME, data.accessToken);
+        await tokenCache?.saveToken(REFRESH_TOKEN_KEY_NAME, data.refreshToken);
+      }
       const userData = jose.decodeJwt(data.accessToken);
       setUser(userData as AuthUser);
 
-      if (!isWeb) {
-        await tokenCache?.saveToken(TOKEN_KEY_NAME, data.accessToken);
-      }
+      // Register push token after sign up
+      await registerPushTokenIfPossible();
     } catch (error) {
       console.error("Sign up error:", error);
       setError(error as AuthError);
@@ -430,57 +447,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const completeOnboarding = async (): Promise<void> => {
     try {
-      const baseUrl =
-        Platform.OS === "android" ? SPRING_TUNNEL : BASE_SPRING_URL;
-      const isWeb = Platform.OS === "web";
-
-      if (isWeb) {
-        // Web: backend aktualizuje sesję cookie
-        const response = await fetch(
-          `${baseUrl}/api/user/complete-onboarding`,
-          {
-            method: "POST",
-            credentials: "include",
-          }
-        );
-
-        if (response.ok) {
-          // Pobierz zaktualizowaną sesję
-          const sessionResponse = await fetch(`${baseUrl}/api/auth/session`, {
-            method: "GET",
-            credentials: "include",
-          });
-
-          if (sessionResponse.ok) {
-            const userData = await sessionResponse.json();
-            setUser(userData as AuthUser);
-          }
+      const response = await authFetch(
+        `${isWeb ? BASE_SPRING_URL : SPRING_TUNNEL}/api/users/complete-onboarding`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "true",
+          },
         }
-      } else {
-        const token = await tokenCache?.getToken(TOKEN_KEY_NAME);
-        const response = await fetch(
-          `${baseUrl}/api/user/complete-onboarding`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "ngrok-skip-browser-warning": "true",
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+      );
 
-        if (response.ok) {
-          const data = await response.json();
-
-          if (data.accessToken) {
-            await tokenCache?.saveToken(TOKEN_KEY_NAME, data.accessToken);
-            const decoded = jose.decodeJwt(data.accessToken);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.accessToken) {
+          await tokenCache?.saveToken(TOKEN_KEY_NAME, data.accessToken);
+          const decoded = jose.decodeJwt(data.accessToken);
+          setUser(decoded as AuthUser);
+        } else {
+          // Token hasn't changed, update user state from current token
+          const currentToken = await tokenCache?.getToken(TOKEN_KEY_NAME);
+          if (currentToken) {
+            const decoded = jose.decodeJwt(currentToken);
             setUser(decoded as AuthUser);
-          } else {
-            setUser((prev) =>
-              prev ? { ...prev, onboardingCompleted: true } : null
-            );
           }
         }
       }
@@ -491,23 +480,59 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const signOut = async () => {
-    if (isWeb) {
-      try {
-        await fetch(`${BASE_SPRING_URL}/api/auth/logout`, {
+    try {
+      await authFetch(
+        `${isWeb ? BASE_SPRING_URL : SPRING_TUNNEL}/api/auth/logout`,
+        {
           method: "POST",
-          credentials: "include",
-        });
-      } catch (e) {
-        console.error("Error during web logout:", e);
-      }
-    } else {
-      await tokenCache?.deleteToken(TOKEN_KEY_NAME);
-      await tokenCache?.deleteToken(REFRESH_TOKEN_KEY_NAME);
+        }
+      );
+    } catch (e) {
+      console.error("Error during logout:", e);
     }
 
-    setUser(null);
+    await tokenCache?.deleteToken(TOKEN_KEY_NAME);
+    await tokenCache?.deleteToken(REFRESH_TOKEN_KEY_NAME);
 
+    setUser(null);
     router.replace("/sign-in");
+  };
+
+  const changePassword = async (
+    oldPassword: string,
+    newPassword: string
+  ): Promise<{
+    success?: boolean;
+    error?: string;
+    fieldErrors?: Record<string, string>;
+  } | void> => {
+    try {
+      const response = await authFetch(
+        `${isWeb ? BASE_SPRING_URL : SPRING_TUNNEL}/api/auth/change-password`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "true",
+          },
+          body: JSON.stringify({ oldPassword, newPassword }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        if (errorData.fieldErrors) {
+          return { fieldErrors: errorData.fieldErrors };
+        }
+
+        return { error: errorData.message || "Błąd zmiany hasła" };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error("Change password error:", error);
+      return { error: "Wystąpił nieoczekiwany błąd" };
+    }
   };
 
   return (
@@ -520,6 +545,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         signUp,
         signOut,
         completeOnboarding,
+        changePassword,
         isLoading,
         error,
       }}
