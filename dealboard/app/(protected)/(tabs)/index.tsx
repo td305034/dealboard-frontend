@@ -168,16 +168,6 @@ export default function DealsScreen() {
     checkAndLoadMore(event);
   };
 
-  const handleHideDeal = async (id: number) => {
-    try {
-      setHidden((prev) => [...prev, id]);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      loadDeals(0, true);
-    }
-  };
-
   const handleAddDealToCart = async (deal: Deal) => {
     if (!user || !deal.id) return;
     try {
@@ -511,7 +501,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#6451f1ff",
     padding: 6,
-    marginBottom: 4,
+    marginBottom: 10,
     marginTop: 6,
     borderRadius: 8,
     gap: 8,

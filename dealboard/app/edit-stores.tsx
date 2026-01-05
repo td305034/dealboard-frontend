@@ -18,6 +18,7 @@ import { useAuth } from "@/context/auth";
 import OnboardingButtons from "@/components/OnboardingButtons";
 import Slider from "@react-native-community/slider";
 import * as Location from "expo-location";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 interface StoreData {
   name: string;
@@ -300,7 +301,13 @@ export default function EditStoresScreen() {
 
       completeOnboarding();
 
-      router.replace("/(protected)/(tabs)");
+      // Check if user has seen tutorial
+      const hasSeenTutorial = await AsyncStorage.getItem("hasSeenTutorial");
+      if (hasSeenTutorial) {
+        router.replace("/(protected)/(tabs)");
+      } else {
+        router.replace("/tutorial");
+      }
     } catch (error) {
       console.error("Error saving preferences:", error);
       alert(
