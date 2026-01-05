@@ -7,6 +7,7 @@ import {
   NativeScrollEvent,
   ActivityIndicator,
   Platform,
+  TouchableOpacity,
 } from "react-native";
 import { Text } from "react-native-paper";
 import Swipeable from "react-native-gesture-handler/Swipeable";
@@ -18,6 +19,7 @@ import { SPRING_TUNNEL, TOKEN_KEY_NAME } from "@/utils/constants";
 import { tokenCache } from "@/utils/cache";
 import { authFetch } from "@/utils/authService";
 import DealCard from "@/components/DealCard";
+import { useFocusEffect } from "@react-navigation/native";
 
 interface RecommendedStore {
   name: string;
@@ -52,16 +54,21 @@ export default function DealsScreen() {
   const [initialLoading, setInitialLoading] = React.useState(true);
   const [recommendedStore, setRecommendedStore] =
     React.useState<RecommendedStore | null>(null);
+  const [collapsedKeywords, setCollapsedKeywords] = React.useState<Set<string>>(
+    new Set()
+  );
   const swipeableRefs = React.useRef<{
     [key: number]: Swipeable | null;
   }>({});
 
-  useEffect(() => {
-    if (user) {
-      loadDeals(0, true);
-      fetchRecommendedStore();
-    }
-  }, [user]);
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user) {
+        loadDeals(0, true);
+        fetchRecommendedStore();
+      }
+    }, [user])
+  );
 
   async function fetchRecommendedStore() {
     try {
@@ -85,37 +92,6 @@ export default function DealsScreen() {
       console.error("Error fetching recommended store:", error);
     }
   }
-
-  // async function fetchUserDeals(pageNum: number): Promise<Deal[]> {
-  //   try {
-  //     const token = await tokenCache?.getToken(TOKEN_KEY_NAME);
-  //     const url = `${SPRING_TUNNEL}/api/deals/mine?page=${pageNum}&size=20`;
-  //     const res = await authFetch(url, {
-  //       headers: {
-  //         "ngrok-skip-browser-warning": "true",
-  //         "Content-Type": "application/json",
-  //       },
-  //     });
-
-  //     const text = await res.text();
-
-  //     if (!res.ok) {
-  //       throw new Error(`HTTP ${res.status}: ${text}`);
-  //     }
-  //     const raw = JSON.parse(text);
-
-  //     if (!Array.isArray(raw.content)) throw new Error("Unexpected payload");
-
-  //     const mapped = raw.content.map(mapRawToDeal);
-  //     const isLastPage = raw.last || raw.content.length < 20;
-  //     setHasMore(!isLastPage);
-
-  //     return mapped;
-  //   } catch (error) {
-  //     console.error("Error fetching deals:", error);
-  //     return [];
-  //   }
-  // }
 
   async function fetchUserDeals(pageNum: number): Promise<GroupedDeal[]> {
     try {
@@ -165,13 +141,6 @@ export default function DealsScreen() {
 
     try {
       const newDeals = await fetchUserDeals(pageNum);
-
-      // const visibleDeals = newDeals.filter(
-      //   (deal) => !hidden.includes(deal.id!)
-      // );
-
-      // setDeals((prev) => (reset ? visibleDeals : [...prev, ...visibleDeals]));
-
       setDeals((prev) => (reset ? newDeals : [...prev, ...newDeals]));
       setPage(pageNum);
     } catch (error) {
@@ -218,17 +187,6 @@ export default function DealsScreen() {
     }
   };
 
-  const renderLeftActions = () => {
-    return (
-      <View style={styles.swipeActionRight}>
-        <MaterialCommunityIcons
-          name="eye-off-outline"
-          size={32}
-          color={"#fff"}
-        ></MaterialCommunityIcons>
-      </View>
-    );
-  };
   const renderRightActions = () => {
     return (
       <View style={styles.swipeActionLeft}>
@@ -241,32 +199,20 @@ export default function DealsScreen() {
     );
   };
 
-  const isDealHidden = (id: number) => hidden.includes(id);
+  const toggleKeyword = (keyword: string) => {
+    setCollapsedKeywords((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(keyword)) {
+        newSet.delete(keyword);
+      } else {
+        newSet.add(keyword);
+      }
+      return newSet;
+    });
+  };
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Aktualne promocje</Text>
-        {recommendedStore && (
-          <View style={styles.recommendedContainer}>
-            <MaterialCommunityIcons
-              name="star"
-              size={18}
-              color="#FFD700"
-              style={styles.starIcon}
-            />
-            <Text style={styles.recommendedText}>
-              Polecany dzisiaj:{" "}
-              <Text style={styles.storeName}>{recommendedStore.name}</Text>{" "}
-              <Text style={styles.dealCount}>
-                ({recommendedStore.dealCount}{" "}
-                {recommendedStore.dealCount === 1 ? "oferta" : "ofert"})
-              </Text>
-            </Text>
-          </View>
-        )}
-      </View>
-
       {initialLoading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#2e7d32" />
@@ -279,45 +225,77 @@ export default function DealsScreen() {
           onScrollEndDrag={checkAndLoadMore}
           scrollEventThrottle={400}
         >
+          {recommendedStore && (
+            <View style={styles.recommendedContainer}>
+              <Text style={styles.recommendedText}>
+                Polecany sklep dzisiaj:{"\n"}
+                <Text style={styles.storeName}>
+                  {recommendedStore.name}
+                </Text>{" "}
+                <Text style={styles.dealCount}>
+                  ({recommendedStore.dealCount}{" "}
+                  {recommendedStore.dealCount === 1 ? "oferta" : "ofert"})
+                </Text>
+              </Text>
+            </View>
+          )}
           {deals?.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateText}>No deals for today.</Text>
             </View>
           ) : (
-            deals?.map((item, key) => (
-              <React.Fragment key={key}>
-                {item.isPrimary && (
-                  <Text style={styles.primaryLabel}>
-                    {item.keyword.charAt(0).toUpperCase() +
-                      item.keyword.slice(1)}
-                  </Text>
-                )}
-                <Swipeable
-                  ref={(ref) => {
-                    swipeableRefs.current[item.deal.id!] = ref;
-                  }}
-                  overshootLeft={false}
-                  overshootRight={false}
-                  renderLeftActions={renderLeftActions}
-                  renderRightActions={() => renderRightActions()}
-                  onSwipeableOpen={(direction) => {
-                    direction == "right"
-                      ? handleAddDealToCart(item.deal)
-                      : handleHideDeal(item.deal.id!);
-                    swipeableRefs.current[item.deal.id!]?.close();
-                  }}
-                >
-                  <DealCard deal={item.deal} isCheapest={item.isCheapest} />
-                </Swipeable>
-              </React.Fragment>
-            ))
+            deals?.map((item, key) => {
+              const isCollapsed = collapsedKeywords.has(item.keyword);
+              const shouldShow = item.isPrimary || !isCollapsed;
+
+              return (
+                <React.Fragment key={key}>
+                  {item.isPrimary && (
+                    <TouchableOpacity
+                      onPress={() => toggleKeyword(item.keyword)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.primaryLabelContainer}>
+                        <Text style={styles.primaryLabel}>
+                          {item.keyword.charAt(0).toUpperCase() +
+                            item.keyword.slice(1)}
+                        </Text>
+                        <MaterialCommunityIcons
+                          name={isCollapsed ? "chevron-down" : "chevron-up"}
+                          size={20}
+                          color="#fff"
+                        />
+                      </View>
+                    </TouchableOpacity>
+                  )}
+                  {shouldShow && (
+                    <Swipeable
+                      ref={(ref) => {
+                        swipeableRefs.current[item.deal.id!] = ref;
+                      }}
+                      overshootLeft={false}
+                      overshootRight={false}
+                      renderRightActions={() => renderRightActions()}
+                      onSwipeableOpen={(direction) => {
+                        direction == "right"
+                          ? handleAddDealToCart(item.deal)
+                          : null;
+                        swipeableRefs.current[item.deal.id!]?.close();
+                      }}
+                    >
+                      <DealCard deal={item.deal} isCheapest={item.isCheapest} />
+                    </Swipeable>
+                  )}
+                </React.Fragment>
+              );
+            })
           )}
 
           {loading && !initialLoading && (
             <View style={styles.footerLoader}>
               <ActivityIndicator size="small" color="#2e7d32" />
               <Text style={styles.loadingText}>
-                ładowanie kolejnych ofert...
+                Ładowanie kolejnych ofert...
               </Text>
             </View>
           )}
@@ -353,25 +331,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#f8f9fa",
     padding: 10,
-    borderRadius: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: "#7868f5ff",
   },
   starIcon: {
     marginRight: 6,
   },
   recommendedText: {
-    fontSize: 14,
-    color: "#666",
+    fontSize: 20,
+    color: "black",
     flex: 1,
   },
   storeName: {
     fontWeight: "700",
-    color: "#7868f5ff",
-    fontSize: 15,
+    color: "#261796ff",
+    fontSize: 36,
   },
   dealCount: {
-    fontSize: 13,
+    fontSize: 20,
     color: "#999",
   },
   title: {
@@ -522,13 +497,24 @@ const styles = StyleSheet.create({
     color: "#666",
   },
   primaryLabel: {
-    backgroundColor: "#7868f5ff",
+    backgroundColor: "#6451f1ff",
     color: "#fff",
     padding: 8,
     marginBottom: 4,
     fontWeight: "bold",
-    fontSize: 14,
+    fontSize: 16,
     borderRadius: 8,
+    flex: 1,
+  },
+  primaryLabelContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#6451f1ff",
+    padding: 6,
+    marginBottom: 4,
+    marginTop: 6,
+    borderRadius: 8,
+    gap: 8,
   },
   loadingContainer: {
     flex: 1,

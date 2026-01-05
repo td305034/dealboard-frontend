@@ -5,12 +5,19 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Deal } from "@/types/Deal";
 import { authFetch } from "@/utils/authService";
 import { SPRING_TUNNEL } from "@/utils/constants";
-import { productName } from "expo-device";
 
-export default function DealCard(deal: Deal) {
+type DealCardProps = {
+  deal: Deal;
+  isCheapest: boolean;
+};
+
+export default function DealCard({ deal, isCheapest }: DealCardProps) {
   const [notificationActive, setNotificationActive] = useState(
     deal.hasNotification ?? false
   );
+  const [expandedName, setExpandedName] = useState(false);
+  const [expandedPrice, setExpandedPrice] = useState(false);
+  const [expandedPromo, setExpandedPromo] = useState(false);
 
   const toggleNotification = async () => {
     const newState = !notificationActive;
@@ -32,9 +39,19 @@ export default function DealCard(deal: Deal) {
     <Card style={styles.card}>
       <View style={styles.cardView}>
         <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle} numberOfLines={2}>
-            {deal.name}
-          </Text>
+          <TouchableOpacity
+            onPress={() => setExpandedName(!expandedName)}
+            style={styles.titleContainer}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={styles.cardTitle}
+              numberOfLines={expandedName ? undefined : 1}
+              ellipsizeMode="tail"
+            >
+              {deal.name}
+            </Text>
+          </TouchableOpacity>
           <View style={styles.rightSection}>
             <TouchableOpacity
               onPress={toggleNotification}
@@ -46,21 +63,57 @@ export default function DealCard(deal: Deal) {
                 color={notificationActive ? "#ff9800" : "#666"}
               />
             </TouchableOpacity>
-            <View style={styles.priceContainer}>
-              <Text style={styles.priceValue}>
+            <TouchableOpacity
+              onPress={() => setExpandedPrice(!expandedPrice)}
+              activeOpacity={0.7}
+              style={[
+                styles.priceContainer,
+                isCheapest && styles.priceContainerCheapest,
+              ]}
+            >
+              <Text
+                style={
+                  isCheapest ? styles.priceValueCheapest : styles.priceValue
+                }
+                numberOfLines={expandedPrice ? undefined : 1}
+                ellipsizeMode="tail"
+              >
                 {deal.priceValue !== null && deal.priceValue !== undefined
                   ? `${deal.priceValue.toFixed(2)}zł`
                   : deal.priceAlt || "N/A"}
               </Text>
               {deal.unit && <Text style={styles.priceUnit}>/{deal.unit}</Text>}
-            </View>
+              {isCheapest && (
+                <MaterialCommunityIcons
+                  name="percent"
+                  size={22}
+                  color="#d32f2f"
+                  style={styles.percentIcon}
+                />
+              )}
+            </TouchableOpacity>
+            {deal.validUntil && (
+              <Text style={styles.dateText}>
+                Do: {new Date(deal.validUntil).toLocaleDateString("pl-PL")}
+              </Text>
+            )}
           </View>
         </View>
 
         {deal.promoNotes && (
-          <Text style={styles.cardDesc} numberOfLines={2}>
-            {deal.promoNotes}
-          </Text>
+          <TouchableOpacity
+            onPress={() => setExpandedPromo(!expandedPromo)}
+            activeOpacity={0.7}
+            style={styles.promoContainer}
+          >
+            <Text
+              style={styles.cardDesc}
+              numberOfLines={expandedPromo ? undefined : 2}
+              ellipsizeMode="tail"
+            >
+              {deal.promoNotes}
+            </Text>
+          </TouchableOpacity>
         )}
 
         <View style={styles.cardFooter}>
@@ -69,19 +122,19 @@ export default function DealCard(deal: Deal) {
               <Text style={styles.categoryText}>{deal.category}</Text>
             </View>
           )}
-          {deal.discountPercentage !== null && (
-            <View style={styles.discountBadge}>
-              <MaterialCommunityIcons name="tag" size={14} color="#d32f2f" />
-              <Text style={styles.discountText}>
-                {deal.discountPercentage}% OFF
-              </Text>
-            </View>
-          )}
         </View>
         <View style={styles.cardFooter}>
           {deal.store && (
             <View style={styles.storeBadge}>
               <Text style={styles.storeText}>{deal.store}</Text>
+            </View>
+          )}
+          {deal.discountPercentage !== null && (
+            <View style={styles.discountBadge}>
+              <MaterialCommunityIcons name="tag" size={14} color="#d32f2f" />
+              <Text style={styles.discountText}>
+                {deal.discountPercentage}% TANIEJ
+              </Text>
             </View>
           )}
         </View>
@@ -114,9 +167,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     gap: 12,
   },
-  cardTitle: {
+  titleContainer: {
     flex: 1,
-    fontSize: 18,
+    maxWidth: "90%",
+  },
+  cardTitle: {
+    fontSize: 24,
     fontWeight: "bold",
     color: "#1a1a1a",
     lineHeight: 24,
@@ -126,6 +182,7 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     alignItems: "flex-end",
     gap: 6,
+    maxWidth: "50%",
   },
   notificationButton: {
     padding: 4,
@@ -142,16 +199,42 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
+    maxWidth: "100%",
+  },
+  priceContainerCheapest: {
+    borderWidth: 3,
+    borderColor: "#d32f2f",
+    backgroundColor: "#ffebee",
+    elevation: 4,
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
   priceValue: {
     fontSize: 20,
     fontWeight: "bold",
     color: "#2e7d32",
   },
+  priceValueCheapest: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#d32f2f",
+  },
   priceUnit: {
     fontSize: 14,
     color: "#666",
     marginLeft: 2,
+  },
+  percentIcon: {
+    marginLeft: 6,
+  },
+  dateText: {
+    fontSize: 12,
+    color: "#666",
+    fontStyle: "italic",
+    marginTop: 4,
+  },
+  promoContainer: {
+    maxWidth: "50%",
   },
   cardDesc: {
     fontSize: 14,
@@ -161,10 +244,11 @@ const styles = StyleSheet.create({
   },
   cardFooter: {
     flexDirection: "row",
-    justifyContent: "flex-start",
+    justifyContent: "space-between",
     alignItems: "center",
     gap: 8,
     flexWrap: "wrap",
+    width: "100%",
   },
   categoryBadge: {
     backgroundColor: "#e3f2fd",
@@ -180,7 +264,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   storeText: {
-    fontSize: 12,
+    fontSize: 20,
     color: "#04002fff",
     fontWeight: "600",
   },
@@ -192,6 +276,7 @@ const styles = StyleSheet.create({
   },
   discountBadge: {
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
     backgroundColor: "#ffebee",
     borderRadius: 6,

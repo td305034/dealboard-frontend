@@ -166,6 +166,7 @@ export default function EditProductsScreen() {
               ]}
               onPress={() => toggleProduct(product)}
             >
+              {!selectedProducts.has(product) && <View style={{ width: 5 }} />}
               <Text
                 style={[
                   styles.productText,
@@ -174,8 +175,10 @@ export default function EditProductsScreen() {
               >
                 {product}
               </Text>
-              {selectedProducts.has(product) && (
+              {selectedProducts.has(product) ? (
                 <MaterialCommunityIcons name="check" size={16} color="#fff" />
+              ) : (
+                <View style={{ width: 6 }} />
               )}
             </TouchableOpacity>
           ))}
@@ -256,6 +259,7 @@ const styles = StyleSheet.create({
   productChip: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 5,
     paddingVertical: 8,
     paddingHorizontal: 16,
