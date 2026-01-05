@@ -6,8 +6,9 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
+  Alert,
 } from "react-native";
-import { Text, Button } from "react-native-paper";
+import { Text, Button, Snackbar } from "react-native-paper";
 import { SPRING_TUNNEL } from "@/utils/constants";
 import { router, useLocalSearchParams } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -15,6 +16,8 @@ import { authFetch } from "@/utils/authService";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "@/context/auth";
 import OnboardingButtons from "@/components/OnboardingButtons";
+import Slider from "@react-native-community/slider";
+import * as Location from "expo-location";
 
 interface StoreData {
   name: string;
@@ -34,6 +37,11 @@ export default function EditStoresScreen() {
   const [storeSearch, setStoreSearch] = useState("");
   const [storesPage, setStoresPage] = useState(0);
   const [hasChanged, setHasChanged] = useState(false);
+  const [radius, setRadius] = useState(5);
+  const [radiusInput, setRadiusInput] = useState("5");
+  const [loadingNearby, setLoadingNearby] = useState(false);
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState("");
   const STORES_PER_PAGE = 30;
 
   const { completeOnboarding } = useAuth();
@@ -64,6 +72,10 @@ export default function EditStoresScreen() {
       setDisplayedStores(stores.slice(0, (storesPage + 1) * STORES_PER_PAGE));
     }
   }, [storeSearch, stores, storesPage]);
+
+  useEffect(() => {
+    setRadiusInput(radius.toString());
+  }, [radius]);
 
   const fetchData = async () => {
     try {
@@ -118,6 +130,94 @@ export default function EditStoresScreen() {
       }
       return next;
     });
+  };
+
+  const findNearbyStores = async () => {
+    setLoadingNearby(true);
+    try {
+      setSelectedStores(new Set());
+      // Sprawdź czy usługi lokalizacji są włączone
+      const enabled = await Location.hasServicesEnabledAsync();
+      if (!enabled) {
+        Alert.alert(
+          "Lokalizacja wyłączona",
+          "Włącz usługi lokalizacji w ustawieniach urządzenia, aby znaleźć sklepy w pobliżu."
+        );
+        setLoadingNearby(false);
+        return;
+      }
+
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Brak uprawnień",
+          "Aplikacja potrzebuje dostępu do lokalizacji, aby znaleźć sklepy w pobliżu."
+        );
+        setLoadingNearby(false);
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+        mayShowUserSettingsDialog: true,
+      });
+
+      const { latitude, longitude } = location.coords;
+
+      const response = await authFetch(
+        `${SPRING_TUNNEL}/api/shops/nearby/unique?lat=${latitude}&lon=${longitude}&radiusKm=${radius}`,
+        {
+          headers: {
+            "ngrok-skip-browser-warning": "true",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch nearby stores");
+      }
+
+      const nearbyStores: string[] = await response.json();
+
+      // Stwórz mapę uppercase -> oryginalna nazwa ze stores
+      const storeNameMap = new Map<string, string>();
+      stores.forEach((s) => {
+        storeNameMap.set(s.name.toUpperCase(), s.name);
+      });
+
+      // Znajdź sklepy z API, które są w stores i użyj ich oryginalnych nazw
+      const storesToSelect: string[] = [];
+      nearbyStores.forEach((apiStoreName) => {
+        const originalName = storeNameMap.get(apiStoreName.toUpperCase());
+        if (originalName) {
+          storesToSelect.push(originalName);
+        }
+      });
+
+      setSelectedStores((prev) => {
+        const next = new Set(prev);
+        storesToSelect.forEach((store) => next.add(store));
+        return next;
+      });
+      setHasChanged(true);
+
+      // Pokaż snackbar z wynikiem
+      if (storesToSelect.length === 0) {
+        setSnackbarMessage(
+          `Nie znaleziono żadnego sklepu w promieniu ${radius} km`
+        );
+      } else {
+        setSnackbarMessage("Znaleziono sklepy na podstawie lokalizacji");
+      }
+      setSnackbarVisible(true);
+    } catch (error) {
+      Alert.alert(
+        "Błąd",
+        "Nie udało się znaleźć sklepów w pobliżu. Sprawdź połączenie internetowe i spróbuj ponownie."
+      );
+    } finally {
+      setLoadingNearby(false);
+    }
   };
 
   const handleSave = async () => {
@@ -238,6 +338,80 @@ export default function EditStoresScreen() {
           onChangeText={setStoreSearch}
         />
 
+        <View style={styles.nearbyContainer}>
+          <View style={styles.sliderHeader}>
+            <MaterialCommunityIcons
+              name="map-marker-radius"
+              size={24}
+              color="#7868f5ff"
+            />
+            <Text variant="titleMedium" style={styles.sliderTitle}>
+              Znajdź sklepy w pobliżu
+            </Text>
+          </View>
+          <View style={styles.sliderContainer}>
+            <View style={styles.radiusInputContainer}>
+              <Text style={styles.radiusInputLabel}>Promień:</Text>
+              <TextInput
+                style={styles.radiusInput}
+                value={radiusInput}
+                onChangeText={(text) => {
+                  setRadiusInput(text);
+                  const num = parseFloat(text.replace(",", "."));
+                  if (!isNaN(num) && num >= 0.5 && num <= 15) {
+                    setRadius(num);
+                  }
+                }}
+                onFocus={() => {
+                  // Zaznacz cały tekst gdy użytkownik zaczyna edycję
+                }}
+                onBlur={() => {
+                  const num = parseFloat(radiusInput.replace(",", "."));
+                  if (isNaN(num) || num < 0.5) {
+                    setRadius(0.5);
+                    setRadiusInput("0.5");
+                  } else if (num > 15) {
+                    setRadius(15);
+                    setRadiusInput("15");
+                  } else {
+                    setRadius(num);
+                    setRadiusInput(num.toString());
+                  }
+                }}
+                keyboardType="decimal-pad"
+                selectTextOnFocus
+              />
+              <Text style={styles.radiusInputLabel}>km</Text>
+            </View>
+            <Slider
+              style={styles.slider}
+              minimumValue={0.5}
+              maximumValue={15}
+              step={0.5}
+              value={radius}
+              onValueChange={setRadius}
+              minimumTrackTintColor="#7868f5ff"
+              maximumTrackTintColor="#ddd"
+              thumbTintColor="#7868f5ff"
+            />
+            <View style={styles.sliderLabels}>
+              <Text style={styles.sliderLabelText}>0.5 km</Text>
+              <Text style={styles.sliderLabelText}>15 km</Text>
+            </View>
+          </View>
+          <Button
+            mode="contained"
+            onPress={findNearbyStores}
+            loading={loadingNearby}
+            disabled={loadingNearby}
+            style={styles.nearbyButton}
+            buttonColor="#7868f5ff"
+            icon="map-search"
+          >
+            {loadingNearby ? "Szukam..." : "Znajdź sklepy"}
+          </Button>
+        </View>
+
         <View style={styles.storesGrid}>
           {displayedStores.map((store) => (
             <TouchableOpacity
@@ -295,6 +469,14 @@ export default function EditStoresScreen() {
           loading={loading}
         />
       </ScrollView>
+      <Snackbar
+        visible={snackbarVisible}
+        onDismiss={() => setSnackbarVisible(false)}
+        duration={3000}
+        style={styles.snackbar}
+      >
+        {snackbarMessage}
+      </Snackbar>
     </SafeAreaView>
   );
 }
@@ -375,5 +557,76 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
+  },
+  nearbyContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+  },
+  sliderHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 16,
+  },
+  sliderTitle: {
+    fontWeight: "600",
+    color: "#333",
+  },
+  sliderContainer: {
+    marginBottom: 16,
+  },
+  radiusInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+    gap: 8,
+  },
+  radiusInputLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#333",
+  },
+  radiusInput: {
+    borderWidth: 1,
+    borderColor: "#7868f5ff",
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#7868f5ff",
+    textAlign: "center",
+    minWidth: 60,
+  },
+  radiusLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#7868f5ff",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  slider: {
+    width: "100%",
+    height: 40,
+  },
+  sliderLabels: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 4,
+  },
+  sliderLabelText: {
+    fontSize: 12,
+    color: "#666",
+  },
+  nearbyButton: {
+    borderRadius: 8,
+  },
+  snackbar: {
+    backgroundColor: "#3A3275",
   },
 });
