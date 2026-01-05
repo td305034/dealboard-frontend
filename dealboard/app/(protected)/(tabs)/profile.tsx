@@ -252,12 +252,7 @@ export default function ProfileScreen() {
         visible={snackbarVisible}
         onDismiss={onDismissSnackBar}
         style={[styles.snackbar, { width: width - 20 }]}
-        action={{
-          label: "Ukryj",
-          onPress: () => {
-            setSnackbarVisible(false);
-          },
-        }}
+        duration={3000}
       >
         {snackbarMessage}
       </Snackbar>
@@ -295,5 +290,6 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     marginRight: 10,
     marginBottom: 0,
+    backgroundColor: "#3A3275",
   },
 });

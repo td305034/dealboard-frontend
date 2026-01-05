@@ -410,7 +410,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error("Error response:", errorData);
 
         if (errorData.fieldErrors) {
           return { errors: errorData.fieldErrors };

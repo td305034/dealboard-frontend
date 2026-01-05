@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { Text } from "react-native-paper";
 import Swipeable from "react-native-gesture-handler/Swipeable";
-import { Deal } from "@/types/Deal";
+import { Deal, GroupedDeal } from "@/types/Deal";
 import { useAuth } from "@/context/auth";
 import { useCart } from "@/context/cart";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -18,6 +18,11 @@ import { SPRING_TUNNEL, TOKEN_KEY_NAME } from "@/utils/constants";
 import { tokenCache } from "@/utils/cache";
 import { authFetch } from "@/utils/authService";
 import DealCard from "@/components/DealCard";
+
+interface RecommendedStore {
+  name: string;
+  dealCount: number;
+}
 
 function mapRawToDeal(raw: any): Deal {
   return {
@@ -39,12 +44,14 @@ function mapRawToDeal(raw: any): Deal {
 export default function DealsScreen() {
   const { user } = useAuth();
   const { addToCart } = useCart();
-  const [deals, setDeals] = React.useState<Deal[]>([]);
+  const [deals, setDeals] = React.useState<GroupedDeal[]>([]);
   const [hidden, setHidden] = React.useState<number[]>([]);
   const [page, setPage] = React.useState(0);
   const [hasMore, setHasMore] = React.useState(true);
   const [loading, setLoading] = React.useState(false);
   const [initialLoading, setInitialLoading] = React.useState(true);
+  const [recommendedStore, setRecommendedStore] =
+    React.useState<RecommendedStore | null>(null);
   const swipeableRefs = React.useRef<{
     [key: number]: Swipeable | null;
   }>({});
@@ -52,13 +59,69 @@ export default function DealsScreen() {
   useEffect(() => {
     if (user) {
       loadDeals(0, true);
+      fetchRecommendedStore();
     }
   }, [user]);
 
-  async function fetchUserDeals(pageNum: number): Promise<Deal[]> {
+  async function fetchRecommendedStore() {
+    try {
+      const res = await authFetch(
+        `${SPRING_TUNNEL}/api/deals/recommended-store`,
+        {
+          headers: {
+            "ngrok-skip-browser-warning": "true",
+          },
+        }
+      );
+
+      if (!res.ok) {
+        console.error("Failed to fetch recommended store");
+        return;
+      }
+
+      const data = await res.json();
+      setRecommendedStore(data);
+    } catch (error) {
+      console.error("Error fetching recommended store:", error);
+    }
+  }
+
+  // async function fetchUserDeals(pageNum: number): Promise<Deal[]> {
+  //   try {
+  //     const token = await tokenCache?.getToken(TOKEN_KEY_NAME);
+  //     const url = `${SPRING_TUNNEL}/api/deals/mine?page=${pageNum}&size=20`;
+  //     const res = await authFetch(url, {
+  //       headers: {
+  //         "ngrok-skip-browser-warning": "true",
+  //         "Content-Type": "application/json",
+  //       },
+  //     });
+
+  //     const text = await res.text();
+
+  //     if (!res.ok) {
+  //       throw new Error(`HTTP ${res.status}: ${text}`);
+  //     }
+  //     const raw = JSON.parse(text);
+
+  //     if (!Array.isArray(raw.content)) throw new Error("Unexpected payload");
+
+  //     const mapped = raw.content.map(mapRawToDeal);
+  //     const isLastPage = raw.last || raw.content.length < 20;
+  //     setHasMore(!isLastPage);
+
+  //     return mapped;
+  //   } catch (error) {
+  //     console.error("Error fetching deals:", error);
+  //     return [];
+  //   }
+  // }
+
+  async function fetchUserDeals(pageNum: number): Promise<GroupedDeal[]> {
     try {
       const token = await tokenCache?.getToken(TOKEN_KEY_NAME);
       const url = `${SPRING_TUNNEL}/api/deals/mine?page=${pageNum}&size=20`;
+
       const res = await authFetch(url, {
         headers: {
           "ngrok-skip-browser-warning": "true",
@@ -71,13 +134,20 @@ export default function DealsScreen() {
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}: ${text}`);
       }
+
       const raw = JSON.parse(text);
 
-      if (!Array.isArray(raw.content)) throw new Error("Unexpected payload");
+      if (!Array.isArray(raw.content)) {
+        throw new Error("Unexpected payload");
+      }
 
-      const mapped = raw.content.map(mapRawToDeal);
-      const isLastPage = raw.last || raw.content.length < 20;
-      setHasMore(!isLastPage);
+      const mapped: GroupedDeal[] = raw.content.map((item: any) => ({
+        keyword: item.keyword,
+        deal: mapRawToDeal(item.deal),
+        isPrimary: item.isPrimary ?? false,
+        isCheapest: item.isCheapest ?? false,
+      }));
+      setHasMore(!raw.last);
 
       return mapped;
     } catch (error) {
@@ -112,11 +182,10 @@ export default function DealsScreen() {
     }
   };
 
-  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+  const checkAndLoadMore = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
-    const paddingToBottom = 20;
+    const paddingToBottom = 100;
 
-    // Check if user scrolled to bottom
     const isCloseToBottom =
       layoutMeasurement.height + contentOffset.y >=
       contentSize.height - paddingToBottom;
@@ -124,6 +193,10 @@ export default function DealsScreen() {
     if (isCloseToBottom && !loading && hasMore) {
       loadDeals(page + 1);
     }
+  };
+
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    checkAndLoadMore(event);
   };
 
   const handleHideDeal = async (id: number) => {
@@ -174,6 +247,24 @@ export default function DealsScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Aktualne promocje</Text>
+        {recommendedStore && (
+          <View style={styles.recommendedContainer}>
+            <MaterialCommunityIcons
+              name="star"
+              size={18}
+              color="#FFD700"
+              style={styles.starIcon}
+            />
+            <Text style={styles.recommendedText}>
+              Polecany dzisiaj:{" "}
+              <Text style={styles.storeName}>{recommendedStore.name}</Text>{" "}
+              <Text style={styles.dealCount}>
+                ({recommendedStore.dealCount}{" "}
+                {recommendedStore.dealCount === 1 ? "oferta" : "ofert"})
+              </Text>
+            </Text>
+          </View>
+        )}
       </View>
 
       {initialLoading ? (
@@ -184,6 +275,8 @@ export default function DealsScreen() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
+          onMomentumScrollEnd={checkAndLoadMore}
+          onScrollEndDrag={checkAndLoadMore}
           scrollEventThrottle={400}
         >
           {deals?.length === 0 ? (
@@ -191,25 +284,32 @@ export default function DealsScreen() {
               <Text style={styles.emptyStateText}>No deals for today.</Text>
             </View>
           ) : (
-            deals?.map((deal, key) => (
-              <Swipeable
-                ref={(ref) => {
-                  swipeableRefs.current[deal.id!] = ref;
-                }}
-                key={key}
-                overshootLeft={false}
-                overshootRight={false}
-                renderLeftActions={renderLeftActions}
-                renderRightActions={() => renderRightActions()}
-                onSwipeableOpen={(direction) => {
-                  direction == "right"
-                    ? handleAddDealToCart(deal)
-                    : handleHideDeal(deal.id!);
-                  swipeableRefs.current[deal.id!]?.close();
-                }}
-              >
-                <DealCard {...deal} />
-              </Swipeable>
+            deals?.map((item, key) => (
+              <React.Fragment key={key}>
+                {item.isPrimary && (
+                  <Text style={styles.primaryLabel}>
+                    {item.keyword.charAt(0).toUpperCase() +
+                      item.keyword.slice(1)}
+                  </Text>
+                )}
+                <Swipeable
+                  ref={(ref) => {
+                    swipeableRefs.current[item.deal.id!] = ref;
+                  }}
+                  overshootLeft={false}
+                  overshootRight={false}
+                  renderLeftActions={renderLeftActions}
+                  renderRightActions={() => renderRightActions()}
+                  onSwipeableOpen={(direction) => {
+                    direction == "right"
+                      ? handleAddDealToCart(item.deal)
+                      : handleHideDeal(item.deal.id!);
+                    swipeableRefs.current[item.deal.id!]?.close();
+                  }}
+                >
+                  <DealCard deal={item.deal} isCheapest={item.isCheapest} />
+                </Swipeable>
+              </React.Fragment>
             ))
           )}
 
@@ -239,11 +339,40 @@ const styles = StyleSheet.create({
     padding: 16,
     backgroundColor: "#F5F5F5",
   },
+  headerContainer: {
+    marginBottom: 16,
+  },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 8,
+  },
+  recommendedContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f8f9fa",
+    padding: 10,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: "#7868f5ff",
+  },
+  starIcon: {
+    marginRight: 6,
+  },
+  recommendedText: {
+    fontSize: 14,
+    color: "#666",
+    flex: 1,
+  },
+  storeName: {
+    fontWeight: "700",
+    color: "#7868f5ff",
+    fontSize: 15,
+  },
+  dealCount: {
+    fontSize: 13,
+    color: "#999",
   },
   title: {
     fontWeight: "bold",
@@ -391,6 +520,15 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     color: "#666",
+  },
+  primaryLabel: {
+    backgroundColor: "#7868f5ff",
+    color: "#fff",
+    padding: 8,
+    marginBottom: 4,
+    fontWeight: "bold",
+    fontSize: 14,
+    borderRadius: 8,
   },
   loadingContainer: {
     flex: 1,

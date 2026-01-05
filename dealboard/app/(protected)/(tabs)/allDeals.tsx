@@ -465,7 +465,9 @@ export default function AllDealsScreen() {
               <Text style={styles.emptyStateText}>Brak promocji</Text>
             </View>
           ) : (
-            deals?.map((deal, key) => <DealCard key={key} {...deal} />)
+            deals?.map((deal, key) => (
+              <DealCard key={key} deal={deal} isCheapest={false} />
+            ))
           )}
 
           {loading && !initialLoading && (

@@ -10,4 +10,12 @@ export interface Deal {
   imageUrl?: string | null;
   unit?: string | null;
   hasNotification?: boolean;
+  validUntil?: string | null;
+}
+
+export interface GroupedDeal {
+  keyword: string;
+  deal: Deal;
+  isPrimary: boolean;
+  isCheapest: boolean;
 }
