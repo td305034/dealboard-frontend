@@ -85,7 +85,7 @@ export default function DealCard({ deal, isCheapest }: DealCardProps) {
               {deal.unit && <Text style={styles.priceUnit}>/{deal.unit}</Text>}
               {isCheapest && (
                 <MaterialCommunityIcons
-                  name="percent"
+                  name="sale"
                   size={22}
                   color="#d32f2f"
                   style={styles.percentIcon}
