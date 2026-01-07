@@ -36,15 +36,8 @@ export default function TutorialScreen() {
               size={32}
               color="#7868f5ff"
             />
-          </View>
-          <View style={styles.tip}>
-            <MaterialCommunityIcons
-              name="gesture-swipe-right"
-              size={32}
-              color="#7868f5ff"
-            />
             <Text style={styles.tipText}>
-              Przesuń w prawo, aby dodać do koszyka
+              Przesuń w lewo, aby dodać do koszyka
             </Text>
           </View>
           <View style={styles.tip}>
