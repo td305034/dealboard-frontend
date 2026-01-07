@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Image,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Text, Card, IconButton, Button } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useCart } from "@/context/cart";
@@ -36,7 +37,9 @@ export default function CartModal({ visible, onClose }: CartModalProps) {
           {deal.priceValue && (
             <Text variant="bodyLarge" style={styles.price}>
               {deal.priceValue.toFixed(2)} zł
-              {deal.unit && ` / ${deal.unit}`}
+              <Text variant="bodySmall" style={styles.unit}>
+                {deal.unit && ` / ${deal.unit}`}
+              </Text>
             </Text>
           )}
           {deal.discountPercentage && (
@@ -65,7 +68,7 @@ export default function CartModal({ visible, onClose }: CartModalProps) {
       onRequestClose={onClose}
     >
       <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
+        <SafeAreaView style={styles.modalContent} edges={["bottom"]}>
           <View style={styles.header}>
             <Text variant="headlineSmall" style={styles.title}>
               Koszyk
@@ -73,7 +76,10 @@ export default function CartModal({ visible, onClose }: CartModalProps) {
             <IconButton icon="close" size={24} onPress={onClose} />
           </View>
 
-          <ScrollView style={styles.scrollView}>
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollViewContent}
+          >
             {cartItems.length === 0 ? (
               <View style={styles.emptyCart}>
                 <MaterialCommunityIcons
@@ -113,7 +119,7 @@ export default function CartModal({ visible, onClose }: CartModalProps) {
               </View>
             </View>
           )}
-        </View>
+        </SafeAreaView>
       </View>
     </Modal>
   );
@@ -146,6 +152,9 @@ const styles = StyleSheet.create({
   scrollView: {
     padding: 16,
   },
+  scrollViewContent: {
+    paddingBottom: 40,
+  },
   cartItem: {
     marginBottom: 12,
     elevation: 2,
@@ -172,6 +181,10 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#2e7d32",
     marginTop: 4,
+  },
+  unit: {
+    fontWeight: "normal",
+    color: "#666",
   },
   discountBadge: {
     backgroundColor: "#e53935",

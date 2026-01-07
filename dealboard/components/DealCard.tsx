@@ -72,9 +72,10 @@ export default function DealCard({ deal, isCheapest }: DealCardProps) {
               ]}
             >
               <Text
-                style={
-                  isCheapest ? styles.priceValueCheapest : styles.priceValue
-                }
+                style={[
+                  isCheapest ? styles.priceValueCheapest : styles.priceValue,
+                  styles.priceText,
+                ]}
                 numberOfLines={expandedPrice ? undefined : 1}
                 ellipsizeMode="tail"
               >
@@ -82,7 +83,11 @@ export default function DealCard({ deal, isCheapest }: DealCardProps) {
                   ? `${deal.priceValue.toFixed(2)}zł`
                   : deal.priceAlt || "N/A"}
               </Text>
-              {deal.unit && <Text style={styles.priceUnit}>/{deal.unit}</Text>}
+              {deal.unit && (
+                <Text style={styles.priceUnit} numberOfLines={1}>
+                  /{deal.unit}
+                </Text>
+              )}
               {isCheapest && (
                 <MaterialCommunityIcons
                   name="sale"
@@ -106,13 +111,15 @@ export default function DealCard({ deal, isCheapest }: DealCardProps) {
             activeOpacity={0.7}
             style={styles.promoContainer}
           >
-            <Text
-              style={styles.cardDesc}
-              numberOfLines={expandedPromo ? undefined : 2}
-              ellipsizeMode="tail"
-            >
-              {deal.promoNotes}
-            </Text>
+            <View style={{ paddingLeft: 6 }}>
+              <Text
+                style={styles.cardDesc}
+                numberOfLines={expandedPromo ? undefined : 2}
+                ellipsizeMode="tail"
+              >
+                {deal.promoNotes}
+              </Text>
+            </View>
           </TouchableOpacity>
         )}
 
@@ -175,7 +182,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "bold",
     color: "#1a1a1a",
-    lineHeight: 24,
+    lineHeight: 28,
     paddingLeft: 4,
   },
   rightSection: {
@@ -219,10 +226,14 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#d32f2f",
   },
+  priceText: {
+    flexShrink: 1,
+  },
   priceUnit: {
     fontSize: 14,
     color: "#666",
     marginLeft: 2,
+    flexShrink: 0,
   },
   percentIcon: {
     marginLeft: 6,
