@@ -17,6 +17,9 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { SPRING_TUNNEL, TOKEN_KEY_NAME } from "@/utils/constants";
 import { authFetch } from "@/utils/authService";
 import DealCard from "@/components/DealCard";
+import { Swipeable } from "react-native-gesture-handler";
+import { useCart } from "@/context/cart";
+import { renderRightActions } from "@/utils/dealService";
 
 type SortOption = "name" | "priceValue" | "discountPercentage";
 type SortDirection = "ASC" | "DESC";
@@ -34,6 +37,7 @@ function mapRawToDeal(raw: any): Deal {
       raw.discount_percent == null ? null : Number(raw.discount_percent),
     imageUrl: raw.imageUrl ?? null,
     unit: raw.unit ?? null,
+    validUntil: raw.valid_until ?? null,
     hasNotification: raw.hasNotification ?? false,
   };
 }
@@ -63,6 +67,12 @@ export default function AllDealsScreen() {
 
   // Filter panel visibility
   const [showFilters, setShowFilters] = useState(false);
+
+  const { addToCart } = useCart();
+
+  const swipeableRefs = React.useRef<{
+    [key: number]: Swipeable | null;
+  }>({});
 
   useEffect(() => {
     if (user) {
@@ -126,7 +136,7 @@ export default function AllDealsScreen() {
 
       return mapped;
     } catch (error) {
-      console.error("Error fetching deals:", error);
+      console.error("Error fetching all deals:", error);
       return [];
     }
   }
@@ -140,7 +150,16 @@ export default function AllDealsScreen() {
 
     try {
       const newDeals = await fetchDeals(pageNum);
-      setDeals((prev) => (reset ? newDeals : [...prev, ...newDeals]));
+      setDeals((prev) => {
+        const combined = [...prev, ...newDeals];
+        const uniqueDeals = Array.from(
+          new Map(
+            combined.map((d) => [d.id ?? `${d.name}-${Math.random()}`, d])
+          ).values()
+        );
+        return uniqueDeals;
+      });
+
       setPage(pageNum);
     } catch (error) {
       console.error("Error loading deals:", error);
@@ -192,6 +211,15 @@ export default function AllDealsScreen() {
     if (maxPrice) count++;
     return count;
   };
+
+  function handleAddDealToCart(deal: any) {
+    if (!user || !deal.id) return;
+    try {
+      addToCart(deal);
+    } catch (error) {
+      console.error(error);
+    }
+  }
 
   return (
     <View style={styles.container}>
@@ -465,8 +493,22 @@ export default function AllDealsScreen() {
               <Text style={styles.emptyStateText}>Brak promocji</Text>
             </View>
           ) : (
-            deals?.map((deal, key) => (
-              <DealCard key={key} deal={deal} isCheapest={false} />
+            deals?.map((deal, index) => (
+              <Swipeable
+                key={deal.id ?? `deal-${index}`}
+                ref={(ref) => {
+                  if (deal.id != null) swipeableRefs.current[deal.id] = ref;
+                }}
+                overshootLeft={false}
+                overshootRight={false}
+                renderRightActions={() => renderRightActions()}
+                onSwipeableOpen={(direction) => {
+                  direction == "right" ? handleAddDealToCart(deal) : null;
+                  if (deal.id != null) swipeableRefs.current[deal.id!]?.close();
+                }}
+              >
+                <DealCard deal={deal} isCheapest={false} />
+              </Swipeable>
             ))
           )}
 

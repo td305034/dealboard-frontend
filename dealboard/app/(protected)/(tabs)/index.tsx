@@ -6,7 +6,6 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   ActivityIndicator,
-  Platform,
   TouchableOpacity,
 } from "react-native";
 import { Text } from "react-native-paper";
@@ -20,6 +19,7 @@ import { tokenCache } from "@/utils/cache";
 import { authFetch } from "@/utils/authService";
 import DealCard from "@/components/DealCard";
 import { useFocusEffect } from "@react-navigation/native";
+import { renderRightActions } from "@/utils/dealService";
 
 interface RecommendedStore {
   name: string;
@@ -39,6 +39,7 @@ function mapRawToDeal(raw: any): Deal {
       raw.discount_percent == null ? null : Number(raw.discount_percent),
     imageUrl: raw.imageUrl ?? null,
     unit: raw.unit ?? null,
+    validUntil: raw.valid_until ?? null,
     hasNotification: raw.hasNotification ?? false,
   };
 }
@@ -57,6 +58,7 @@ export default function DealsScreen() {
   const [collapsedKeywords, setCollapsedKeywords] = React.useState<Set<string>>(
     new Set()
   );
+  const [scrollViewHeight, setScrollViewHeight] = React.useState(0);
   const swipeableRefs = React.useRef<{
     [key: number]: Swipeable | null;
   }>({});
@@ -104,7 +106,6 @@ export default function DealsScreen() {
           "Content-Type": "application/json",
         },
       });
-
       const text = await res.text();
 
       if (!res.ok) {
@@ -141,7 +142,16 @@ export default function DealsScreen() {
 
     try {
       const newDeals = await fetchUserDeals(pageNum);
-      setDeals((prev) => (reset ? newDeals : [...prev, ...newDeals]));
+      setDeals((prev) => {
+        if (reset) return newDeals;
+        const existingKeys = new Set(
+          prev.map((item) => `${item.keyword}_${item.deal.id}`)
+        );
+        const uniqueNewDeals = newDeals.filter(
+          (item) => !existingKeys.has(`${item.keyword}_${item.deal.id}`)
+        );
+        return [...prev, ...uniqueNewDeals];
+      });
       setPage(pageNum);
     } catch (error) {
       console.error("Error loading deals:", error);
@@ -164,6 +174,13 @@ export default function DealsScreen() {
     }
   };
 
+  const checkContentHeight = (contentHeight: number) => {
+    // Jeśli zawartość jest krótsza niż ekran, automatycznie załaduj więcej
+    if (contentHeight < scrollViewHeight && !loading && hasMore) {
+      loadDeals(page + 1);
+    }
+  };
+
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     checkAndLoadMore(event);
   };
@@ -175,18 +192,6 @@ export default function DealsScreen() {
     } catch (error) {
       console.error(error);
     }
-  };
-
-  const renderRightActions = () => {
-    return (
-      <View style={styles.swipeActionLeft}>
-        <MaterialCommunityIcons
-          name="shopping-outline"
-          size={32}
-          color={"#fff"}
-        ></MaterialCommunityIcons>
-      </View>
-    );
   };
 
   const toggleKeyword = (keyword: string) => {
@@ -214,6 +219,12 @@ export default function DealsScreen() {
           onMomentumScrollEnd={checkAndLoadMore}
           onScrollEndDrag={checkAndLoadMore}
           scrollEventThrottle={400}
+          onLayout={(event) => {
+            setScrollViewHeight(event.nativeEvent.layout.height);
+          }}
+          onContentSizeChange={(_, contentHeight) => {
+            checkContentHeight(contentHeight);
+          }}
         >
           {recommendedStore && (
             <View style={styles.recommendedContainer}>
@@ -234,12 +245,13 @@ export default function DealsScreen() {
               <Text style={styles.emptyStateText}>No deals for today.</Text>
             </View>
           ) : (
-            deals?.map((item, key) => {
+            deals?.map((item) => {
               const isCollapsed = collapsedKeywords.has(item.keyword);
               const shouldShow = item.isPrimary || !isCollapsed;
+              const uniqueKey = `${item.keyword}_${item.deal.id}_${item.isPrimary}`;
 
               return (
-                <React.Fragment key={key}>
+                <React.Fragment key={uniqueKey}>
                   {item.isPrimary && (
                     <TouchableOpacity
                       onPress={() => toggleKeyword(item.keyword)}
@@ -272,6 +284,7 @@ export default function DealsScreen() {
                           : null;
                         swipeableRefs.current[item.deal.id!]?.close();
                       }}
+                      key={`${item.keyword}_${item.deal.id}`}
                     >
                       <DealCard deal={item.deal} isCheapest={item.isCheapest} />
                     </Swipeable>
@@ -528,25 +541,5 @@ const styles = StyleSheet.create({
     color: "#999",
     fontSize: 14,
     fontStyle: "italic",
-  },
-  swipeActionLeft: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "flex-end",
-    borderRadius: 18,
-    marginBottom: 12,
-    marginTop: 2,
-    paddingRight: 16,
-    backgroundColor: "#4caf50",
-  },
-  swipeActionRight: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "flex-start",
-    borderRadius: 18,
-    marginBottom: 12,
-    marginTop: 2,
-    paddingLeft: 16,
-    backgroundColor: "#e53935",
   },
 });
