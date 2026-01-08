@@ -31,8 +31,10 @@ export default function RegisterForm() {
       return;
     }
 
-    if (password !== repeatedPassword)
+    if (password !== repeatedPassword) {
       setRepeatedPasswordError("Powtórzone hasło jest inne niż hasło!");
+      return;
+    }
     const result = await signUp(name, email, password);
 
     // Handle field-specific errors
