@@ -83,7 +83,7 @@ export default function DealCard({ deal, isCheapest }: DealCardProps) {
                   ? `${deal.priceValue.toFixed(2)}zł`
                   : deal.priceAlt || "N/A"}
               </Text>
-              {deal.unit && (
+              {deal.unit && deal.priceValue != null && (
                 <Text style={styles.priceUnit} numberOfLines={1}>
                   /{deal.unit}
                 </Text>

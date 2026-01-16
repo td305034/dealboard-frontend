@@ -1,6 +1,11 @@
 import UserCard from "@/components/UserCard";
 import { useAuth } from "@/context/auth";
-import { View, StyleSheet, useWindowDimensions } from "react-native";
+import {
+  View,
+  StyleSheet,
+  useWindowDimensions,
+  TouchableOpacity,
+} from "react-native";
 import {
   Text,
   Button,
@@ -8,15 +13,19 @@ import {
   Dialog,
   TextInput,
   Snackbar,
+  RadioButton,
 } from "react-native-paper";
 import { useState } from "react";
 import { router } from "expo-router";
 
 export default function ProfileScreen() {
-  const { user, signOut, changePassword, changeName } = useAuth();
+  const { user, signOut, changePassword, changeName, updateNotificationTime } =
+    useAuth();
   const { width } = useWindowDimensions();
   const [portalVisible, setPortalVisible] = useState(false);
   const [nameDialogVisible, setNameDialogVisible] = useState(false);
+  const [notificationDialogVisible, setNotificationDialogVisible] =
+    useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState(
     "Hasło zostało pomyślnie zmienione."
@@ -25,6 +34,7 @@ export default function ProfileScreen() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [newName, setNewName] = useState("");
+  const [notificationTime, setNotificationTime] = useState("morning");
   const [error, setError] = useState("");
   const [nameError, setNameError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -94,6 +104,11 @@ export default function ProfileScreen() {
       setNameLoading(false);
       return;
     }
+    if (newName.length < 2) {
+      setNameError("Imię musi mieć co najmniej 2 znaki");
+      setNameLoading(false);
+      return;
+    }
 
     const result = await changeName(newName);
 
@@ -108,12 +123,30 @@ export default function ProfileScreen() {
     setNameLoading(false);
   };
 
+  const showNotificationDialog = () => setNotificationDialogVisible(true);
+
+  const hideNotificationDialog = () => {
+    setNotificationDialogVisible(false);
+  };
+
+  const handleSaveNotificationTime = async () => {
+    setLoading(true);
+    const result = await updateNotificationTime(notificationTime);
+
+    if (result?.success) {
+      hideNotificationDialog();
+      setSnackbarMessage("Pora powiadomień została zapisana.");
+      onShowSnackBar();
+    } else if (result?.error) {
+      setSnackbarMessage(result.error);
+      onShowSnackBar();
+    }
+
+    setLoading(false);
+  };
+
   return (
     <View style={styles.container}>
-      <Text variant="headlineMedium" style={styles.title}>
-        Profil
-      </Text>
-
       <UserCard />
 
       <Text variant="titleMedium" style={styles.sectionTitle}>
@@ -164,6 +197,15 @@ export default function ProfileScreen() {
 
       <Button
         mode="contained"
+        onPress={showNotificationDialog}
+        style={styles.button}
+        buttonColor="#7868f5ff"
+      >
+        Powiadomienia
+      </Button>
+
+      <Button
+        mode="contained"
         onPress={signOut}
         style={styles.button}
         buttonColor="#d32f2f"
@@ -172,6 +214,52 @@ export default function ProfileScreen() {
       </Button>
 
       <Portal>
+        <Dialog
+          visible={notificationDialogVisible}
+          onDismiss={hideNotificationDialog}
+        >
+          <Dialog.Title>Pora powiadomień</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodyMedium" style={styles.dialogDescription}>
+              Wybierz porę dnia, kiedy chcesz otrzymywać powiadomienia o
+              promocjach
+            </Text>
+            <RadioButton.Group
+              onValueChange={setNotificationTime}
+              value={notificationTime}
+            >
+              <TouchableOpacity
+                style={styles.radioItem}
+                onPress={() => setNotificationTime("morning")}
+                activeOpacity={0.7}
+              >
+                <RadioButton value="morning" />
+                <Text style={styles.radioLabel}>Rano (8:00)</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.radioItem}
+                onPress={() => setNotificationTime("afternoon")}
+                activeOpacity={0.7}
+              >
+                <RadioButton value="afternoon" />
+                <Text style={styles.radioLabel}>Popołudnie (14:00)</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.radioItem}
+                onPress={() => setNotificationTime("evening")}
+                activeOpacity={0.7}
+              >
+                <RadioButton value="evening" />
+                <Text style={styles.radioLabel}>Wieczór (20:00)</Text>
+              </TouchableOpacity>
+            </RadioButton.Group>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={hideNotificationDialog}>Anuluj</Button>
+            <Button onPress={handleSaveNotificationTime}>Zapisz</Button>
+          </Dialog.Actions>
+        </Dialog>
+
         <Dialog visible={nameDialogVisible} onDismiss={hideNameDialog}>
           <Dialog.Title>Zmiana imienia</Dialog.Title>
           <Dialog.Content>
@@ -291,5 +379,18 @@ const styles = StyleSheet.create({
     marginRight: 10,
     marginBottom: 0,
     backgroundColor: "#3A3275",
+  },
+  dialogDescription: {
+    marginBottom: 16,
+    color: "#666",
+  },
+  radioItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  radioLabel: {
+    fontSize: 16,
+    marginLeft: 8,
   },
 });

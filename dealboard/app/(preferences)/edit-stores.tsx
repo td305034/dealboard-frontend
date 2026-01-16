@@ -7,9 +7,10 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  Platform,
 } from "react-native";
 import { Text, Button, Snackbar } from "react-native-paper";
-import { SPRING_TUNNEL } from "@/utils/constants";
+import { BASE_SPRING_URL, SPRING_TUNNEL } from "@/utils/constants";
 import { router, useLocalSearchParams } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { authFetch } from "@/utils/authService";
@@ -44,6 +45,9 @@ export default function EditStoresScreen() {
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const STORES_PER_PAGE = 30;
+
+  const isWeb = Platform.OS === "web";
+  const baseUrl = isWeb ? BASE_SPRING_URL : SPRING_TUNNEL;
 
   const { completeOnboarding } = useAuth();
 
@@ -81,12 +85,12 @@ export default function EditStoresScreen() {
   const fetchData = async () => {
     try {
       const [storesResponse, selectedResponse] = await Promise.all([
-        authFetch(`${SPRING_TUNNEL}/api/stores`, {
+        authFetch(`${baseUrl}/api/stores`, {
           headers: {
             "ngrok-skip-browser-warning": "true",
           },
         }),
-        authFetch(`${SPRING_TUNNEL}/api/users/selected-stores`, {
+        authFetch(`${baseUrl}/api/users/selected-stores`, {
           headers: {
             "ngrok-skip-browser-warning": "true",
           },
@@ -166,7 +170,7 @@ export default function EditStoresScreen() {
       const { latitude, longitude } = location.coords;
 
       const response = await authFetch(
-        `${SPRING_TUNNEL}/api/shops/nearby/unique?lat=${latitude}&lon=${longitude}&radiusKm=${radius}`,
+        `${baseUrl}/api/shops/nearby/unique?lat=${latitude}&lon=${longitude}&radiusKm=${radius}`,
         {
           headers: {
             "ngrok-skip-browser-warning": "true",
@@ -180,13 +184,11 @@ export default function EditStoresScreen() {
 
       const nearbyStores: string[] = await response.json();
 
-      // Stwórz mapę uppercase -> oryginalna nazwa ze stores
       const storeNameMap = new Map<string, string>();
       stores.forEach((s) => {
         storeNameMap.set(s.name.toUpperCase(), s.name);
       });
 
-      // Znajdź sklepy z API, które są w stores i użyj ich oryginalnych nazw
       const storesToSelect: string[] = [];
       nearbyStores.forEach((apiStoreName) => {
         const originalName = storeNameMap.get(apiStoreName.toUpperCase());
@@ -201,8 +203,6 @@ export default function EditStoresScreen() {
         return next;
       });
       setHasChanged(true);
-
-      // Pokaż snackbar z wynikiem
       if (storesToSelect.length === 0) {
         setSnackbarMessage(
           `Nie znaleziono żadnego sklepu w promieniu ${radius} km`
@@ -301,7 +301,6 @@ export default function EditStoresScreen() {
 
       completeOnboarding();
 
-      // Check if user has seen tutorial
       const hasSeenTutorial = await AsyncStorage.getItem("hasSeenTutorial");
       if (hasSeenTutorial) {
         router.replace("/(protected)/(tabs)");

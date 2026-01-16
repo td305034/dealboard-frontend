@@ -18,7 +18,11 @@ import { Platform } from "react-native";
 import { tokenCache } from "@/utils/cache";
 import * as jose from "jose";
 import { router } from "expo-router";
-import { authFetch, registerPushToken } from "@/utils/authService";
+import {
+  authFetch,
+  registerPushToken,
+  updateNotificationTime as updateNotificationTimeService,
+} from "@/utils/authService";
 import { useNotification } from "./notification";
 
 // Only complete auth session on web - Expo Router handles deep links on native
@@ -34,6 +38,7 @@ export type AuthUser = {
   exp?: number;
   cookieExpiration?: number;
   onboardingCompleted?: boolean;
+  role?: string;
 };
 
 export type FieldErrors = {
@@ -68,6 +73,12 @@ const AuthContext = React.createContext({
   } | void> => {},
   changeName: async (
     newName: string
+  ): Promise<{
+    success?: boolean;
+    error?: string;
+  } | void> => {},
+  updateNotificationTime: async (
+    notificationTime: string
   ): Promise<{
     success?: boolean;
     error?: string;
@@ -371,14 +382,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       const data = await response.json();
 
-      if (!isWeb) {
-        // First clear any old tokens to avoid race conditions
-        await tokenCache?.deleteToken(TOKEN_KEY_NAME);
-        await tokenCache?.deleteToken(REFRESH_TOKEN_KEY_NAME);
-        // Then save new tokens
-        await tokenCache?.saveToken(TOKEN_KEY_NAME, data.accessToken);
-        await tokenCache?.saveToken(REFRESH_TOKEN_KEY_NAME, data.refreshToken);
-      }
+      // First clear any old tokens to avoid race conditions
+      await tokenCache?.deleteToken(TOKEN_KEY_NAME);
+      await tokenCache?.deleteToken(REFRESH_TOKEN_KEY_NAME);
+      // Then save new tokens
+      await tokenCache?.saveToken(TOKEN_KEY_NAME, data.accessToken);
+      await tokenCache?.saveToken(REFRESH_TOKEN_KEY_NAME, data.refreshToken);
+
       const userData = jose.decodeJwt(data.accessToken);
       setUser(userData as AuthUser);
 
@@ -422,14 +432,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       const data = await response.json();
-      if (!isWeb) {
-        // First clear any old tokens to avoid race conditions
-        await tokenCache?.deleteToken(TOKEN_KEY_NAME);
-        await tokenCache?.deleteToken(REFRESH_TOKEN_KEY_NAME);
-        // Then save new tokens
-        await tokenCache?.saveToken(TOKEN_KEY_NAME, data.accessToken);
-        await tokenCache?.saveToken(REFRESH_TOKEN_KEY_NAME, data.refreshToken);
-      }
+
+      // First clear any old tokens to avoid race conditions
+      await tokenCache?.deleteToken(TOKEN_KEY_NAME);
+      await tokenCache?.deleteToken(REFRESH_TOKEN_KEY_NAME);
+      // Then save new tokens
+      await tokenCache?.saveToken(TOKEN_KEY_NAME, data.accessToken);
+      await tokenCache?.saveToken(REFRESH_TOKEN_KEY_NAME, data.refreshToken);
+
       const userData = jose.decodeJwt(data.accessToken);
       setUser(userData as AuthUser);
 
@@ -549,7 +559,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             "Content-Type": "application/json",
             "ngrok-skip-browser-warning": "true",
           },
-          body: JSON.stringify({ name: newName }),
+          body: newName,
         }
       );
 
@@ -585,6 +595,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const updateNotificationTime = async (
+    notificationTime: string
+  ): Promise<{
+    success?: boolean;
+    error?: string;
+  } | void> => {
+    return await updateNotificationTimeService(notificationTime);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -597,6 +616,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         completeOnboarding,
         changePassword,
         changeName,
+        updateNotificationTime,
         isLoading,
         error,
       }}

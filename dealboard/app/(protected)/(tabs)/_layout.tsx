@@ -3,9 +3,15 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import React from "react";
 import CartButton from "@/components/CartButton";
 import CartModal from "@/components/CartModal";
+import { useAuth } from "@/context/auth";
+import { Platform } from "react-native";
 
 export default function TabsLayout() {
   const [cartModalVisible, setCartModalVisible] = React.useState(false);
+  const { user } = useAuth();
+
+  const isAdmin = user?.role === "ADMIN";
+  const isWeb = Platform.OS === "web";
 
   return (
     <>
@@ -51,6 +57,20 @@ export default function TabsLayout() {
             tabBarIcon: ({ color, size }) => (
               <MaterialCommunityIcons
                 name="account-circle-outline"
+                size={size}
+                color={color}
+              />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="admin"
+          options={{
+            title: "Admin",
+            href: isAdmin && isWeb ? undefined : null,
+            tabBarIcon: ({ color, size }) => (
+              <MaterialCommunityIcons
+                name="shield-account"
                 size={size}
                 color={color}
               />

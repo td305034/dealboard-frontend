@@ -7,6 +7,7 @@ import {
   NativeScrollEvent,
   ActivityIndicator,
   TouchableOpacity,
+  Platform,
 } from "react-native";
 import { Text } from "react-native-paper";
 import Swipeable from "react-native-gesture-handler/Swipeable";
@@ -14,7 +15,11 @@ import { Deal, GroupedDeal } from "@/types/Deal";
 import { useAuth } from "@/context/auth";
 import { useCart } from "@/context/cart";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { SPRING_TUNNEL, TOKEN_KEY_NAME } from "@/utils/constants";
+import {
+  BASE_SPRING_URL,
+  SPRING_TUNNEL,
+  TOKEN_KEY_NAME,
+} from "@/utils/constants";
 import { tokenCache } from "@/utils/cache";
 import { authFetch } from "@/utils/authService";
 import DealCard from "@/components/DealCard";
@@ -40,7 +45,7 @@ function mapRawToDeal(raw: any): Deal {
     imageUrl: raw.imageUrl ?? null,
     unit: raw.unit ?? null,
     validUntil: raw.valid_until ?? null,
-    hasNotification: raw.hasNotification ?? false,
+    hasNotification: raw.has_notification ?? false,
   };
 }
 
@@ -62,6 +67,9 @@ export default function DealsScreen() {
   const swipeableRefs = React.useRef<{
     [key: number]: Swipeable | null;
   }>({});
+
+  const isWeb = Platform.OS === "web";
+  const baseUrl = isWeb ? BASE_SPRING_URL : SPRING_TUNNEL;
 
   useFocusEffect(
     React.useCallback(() => {
@@ -98,7 +106,7 @@ export default function DealsScreen() {
   async function fetchUserDeals(pageNum: number): Promise<GroupedDeal[]> {
     try {
       const token = await tokenCache?.getToken(TOKEN_KEY_NAME);
-      const url = `${SPRING_TUNNEL}/api/deals/mine?page=${pageNum}&size=20`;
+      const url = `${baseUrl}/api/deals/mine?page=${pageNum}&size=20`;
 
       const res = await authFetch(url, {
         headers: {
@@ -113,7 +121,6 @@ export default function DealsScreen() {
       }
 
       const raw = JSON.parse(text);
-
       if (!Array.isArray(raw.content)) {
         throw new Error("Unexpected payload");
       }
@@ -126,6 +133,7 @@ export default function DealsScreen() {
       }));
       setHasMore(!raw.last);
 
+      console.log("Fetched deals:", mapped);
       return mapped;
     } catch (error) {
       console.error("Error fetching deals:", error);
@@ -144,6 +152,7 @@ export default function DealsScreen() {
       const newDeals = await fetchUserDeals(pageNum);
       setDeals((prev) => {
         if (reset) return newDeals;
+        // Filter out duplicates based on keyword + deal.id combination
         const existingKeys = new Set(
           prev.map((item) => `${item.keyword}_${item.deal.id}`)
         );
@@ -175,7 +184,6 @@ export default function DealsScreen() {
   };
 
   const checkContentHeight = (contentHeight: number) => {
-    // Jeśli zawartość jest krótsza niż ekran, automatycznie załaduj więcej
     if (contentHeight < scrollViewHeight && !loading && hasMore) {
       loadDeals(page + 1);
     }

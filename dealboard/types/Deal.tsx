@@ -11,6 +11,8 @@ export interface Deal {
   unit?: string | null;
   hasNotification?: boolean;
   validUntil?: string | null;
+  validSince?: string | null;
+  appRequired?: boolean | null;
 }
 
 export interface GroupedDeal {

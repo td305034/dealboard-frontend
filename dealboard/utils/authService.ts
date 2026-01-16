@@ -81,3 +81,45 @@ export const registerPushToken = async (pushToken: string) => {
     // Silent fail
   }
 };
+
+export const updateNotificationTime = async (
+  notificationTime: string
+): Promise<{ success?: boolean; error?: string }> => {
+  const isWeb = Platform.OS === "web";
+  try {
+    const payload = { notificationTime: notificationTime.toUpperCase() };
+    console.log("Sending notification time update:", payload);
+
+    const response = await authFetch(
+      `${isWeb ? BASE_SPRING_URL : SPRING_TUNNEL}/api/users/notification-time`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+
+    console.log("Response status:", response.status);
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Error response:", errorData);
+      return {
+        error:
+          errorData.message ||
+          errorData.error ||
+          "Błąd aktualizacji preferencji powiadomień",
+      };
+    }
+
+    const result = await response.json();
+    console.log("Success response:", result);
+    return { success: true };
+  } catch (error) {
+    console.error("Update notification time error:", error);
+    return { error: "Wystąpił nieoczekiwany błąd" };
+  }
+};

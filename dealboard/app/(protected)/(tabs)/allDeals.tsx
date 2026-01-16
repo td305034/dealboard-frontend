@@ -151,6 +151,11 @@ export default function AllDealsScreen() {
     try {
       const newDeals = await fetchDeals(pageNum);
       setDeals((prev) => {
+        if (reset) {
+          // Przy resecie (zmiana filtrów/sortowania) zacznij od nowa
+          return newDeals;
+        }
+        // Przy ładowaniu kolejnej strony, dodaj do istniejących
         const combined = [...prev, ...newDeals];
         const uniqueDeals = Array.from(
           new Map(
@@ -223,30 +228,43 @@ export default function AllDealsScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Search bar */}
-      <View style={styles.searchContainer}>
-        <MaterialCommunityIcons
-          name="magnify"
-          size={20}
-          color="#666"
-          style={styles.searchIcon}
-        />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Szukaj po nazwie..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholderTextColor="#999"
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery("")}>
-            <MaterialCommunityIcons
-              name="close-circle"
-              size={20}
-              color="#666"
-            />
-          </TouchableOpacity>
-        )}
+      {/* Search bar and refresh button */}
+      <View style={styles.topBar}>
+        <View style={styles.searchContainer}>
+          <MaterialCommunityIcons
+            name="magnify"
+            size={20}
+            color="#666"
+            style={styles.searchIcon}
+          />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Szukaj po nazwie..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholderTextColor="#999"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery("")}>
+              <MaterialCommunityIcons
+                name="close-circle"
+                size={20}
+                color="#666"
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+        <TouchableOpacity
+          style={styles.refreshButton}
+          onPress={() => loadDeals(0, true)}
+          disabled={loading}
+        >
+          <MaterialCommunityIcons
+            name="refresh"
+            size={32}
+            color={loading ? "#ccc" : "#2e7d32"}
+          />
+        </TouchableOpacity>
       </View>
 
       {/* Filter toggle button */}
@@ -587,6 +605,23 @@ const styles = StyleSheet.create({
   clearIconButton: {
     padding: 4,
   },
+  topBar: {
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  refreshButton: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
   filtersPanel: {
     backgroundColor: "#fff",
     borderRadius: 12,
@@ -599,13 +634,13 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
   },
   searchContainer: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#fff",
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    marginBottom: 12,
     elevation: 2,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
